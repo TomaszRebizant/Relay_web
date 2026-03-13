@@ -1,0 +1,94 @@
+<script setup lang="ts">
+import { ref, computed } from 'vue'
+import { RouterLink, useRoute } from 'vue-router'
+
+const route = useRoute()
+
+const menuItems = ref([
+  {
+    icon: '📊',
+    label: 'Dashboard',
+    route: '/',
+  },
+  {
+    icon: '🔧',
+    label: 'Urządzenia',
+    route: '/devices',
+  },
+  {
+    icon: '📝',
+    label: 'Zgłoszenia',
+    route: '/reports',
+  },
+  {
+    icon: '👥',
+    label: 'Użytkownicy',
+    route: '/users',
+  },
+  {
+    icon: '📅',
+    label: 'Kalendarz',
+    route: '/calendar',
+  },
+  {
+    icon: '🗺️',
+    label: 'Mapa budynku',
+    route: '/building-map',
+  },
+  {
+    icon: '⏱️',
+    label: 'SLA Monitoring',
+    route: '/sla',
+  },
+  {
+    icon: '⚙️',
+    label: 'Ustawienia',
+    route: '/settings',
+  }
+])
+
+const isActive = (itemRoute: string) => {
+  if (itemRoute === '/') {
+    return route.path === '/'
+  }
+  return route.path.startsWith(itemRoute)
+}
+</script>
+
+<template>
+  <aside class="flex flex-col bg-gradient-to-b from-slate-700 to-slate-800 shadow-lg w-64 text-white">
+    <div class="p-6 border-white/10 border-b">
+      <div class="flex items-center gap-3">
+        <span class="text-2xl">🔧</span>
+        <span class="font-semibold text-gray-100 text-xl">ServiceHub</span>
+      </div>
+    </div>
+    
+    <nav class="flex-1 py-4">
+      <ul class="space-y-1">
+        <li v-for="item in menuItems" :key="item.route">
+          <RouterLink 
+            :to="item.route" 
+            class="flex items-center gap-3 hover:bg-white/10 px-6 py-3.5 border-transparent border-l-4 text-white/80 hover:text-white transition-all duration-300"
+            :class="{ 'bg-white/15 text-white border-l-blue-500': isActive(item.route) }"
+          >
+            <span class="w-5 text-lg text-center">{{ item.icon }}</span>
+            <span class="font-medium">{{ item.label }}</span>
+          </RouterLink>
+        </li>
+      </ul>
+    </nav>
+    
+    <div class="p-4 border-white/10 border-t">
+      <div class="flex items-center gap-3">
+        <div class="flex justify-center items-center bg-white/20 rounded-full w-10 h-10 text-lg">
+          👤
+        </div>
+        <div class="flex-1">
+          <div class="font-semibold text-gray-100 text-sm">Admin User</div>
+          <div class="text-white/60 text-xs">Administrator</div>
+        </div>
+      </div>
+    </div>
+  </aside>
+</template>
