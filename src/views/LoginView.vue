@@ -14,6 +14,8 @@ const password = ref('')
 const twoFACode = ref('')
 const show2FA = ref(false)
 
+const googleClientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
+
 // Load Google Identity Services
 onMounted(() => {
   const script = document.createElement('script')
@@ -116,7 +118,7 @@ async function handleGoogleLogin(response: any) {
         <!-- Google Sign-In Button -->
         <div class="mt-4">
           <div id="g_id_onload"
-               :data-client_id="import.meta.env.VITE_GOOGLE_CLIENT_ID"
+               :data-client_id="googleClientId"
                data-context="signin"
                data-ux_mode="popup"
                data-callback="handleGoogleLogin"
