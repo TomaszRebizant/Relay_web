@@ -46,11 +46,18 @@ function backToLogin() {
 function handleGoogleLogin() {
   const googleAuthUrl = 'https://accounts.google.com/o/oauth2/v2/auth'
   const clientId = import.meta.env.VITE_GOOGLE_CLIENT_ID
-  const redirectUri = encodeURIComponent('https://relay-web-zeta.vercel.app/auth/google/callback')
+
+  // Use localhost for development, production URL for deploy
+  const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1'
+  const redirectUri = isLocalhost
+    ? encodeURIComponent('http://localhost:5173/auth/google/callback')
+    : encodeURIComponent('https://relay-web-zeta.vercel.app/auth/google/callback')
+
   const scope = encodeURIComponent('email profile')
   const responseType = 'code'
 
   const authUrl = `${googleAuthUrl}?client_id=${clientId}&redirect_uri=${redirectUri}&scope=${scope}&response_type=${responseType}`
+  console.log('Google Auth URL:', authUrl)
   window.location.href = authUrl
 }
 </script>
