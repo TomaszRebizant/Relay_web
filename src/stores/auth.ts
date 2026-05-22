@@ -188,7 +188,7 @@ export const useAuthStore = defineStore('auth', () => {
     error.value = null
 
     try {
-      console.log('Resetting password with token')
+      console.log('Resetting password with:', { token, email, passwordLength: password.length })
       const response = await api.post('/public/mobile/password/reset', {
         token,
         email,
@@ -200,6 +200,8 @@ export const useAuthStore = defineStore('auth', () => {
     } catch (err: any) {
       console.error('Password reset error:', err)
       console.error('Error response:', err.response?.data)
+      console.error('Error status:', err.response?.status)
+      console.error('Error data:', JSON.stringify(err.response?.data, null, 2))
       error.value = err.response?.data?.message || err.message || 'Password reset failed'
       return false
     } finally {
