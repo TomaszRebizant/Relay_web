@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useAuthStore } from '../stores/auth'
+import api from '../utils/api'
 import BaseButton from '../components/ui/BaseButton.vue'
 import BaseCard from '../components/ui/BaseCard.vue'
 
@@ -11,6 +12,12 @@ const twoFASecret = ref<string>('')
 const twoFAQRCode = ref<string>('')
 const twoFARecoveryCodes = ref<string[]>([])
 const show2FASetup = ref(false)
+
+// Password Change
+const currentPassword = ref('')
+const newPassword = ref('')
+const confirmNewPassword = ref('')
+const showPasswordChange = ref(false)
 
 async function setupTwoFactor() {
   const result = await authStore.setup2FA()
@@ -26,6 +33,49 @@ function close2FASetup() {
   twoFASecret.value = ''
   twoFAQRCode.value = ''
   twoFARecoveryCodes.value = []
+}
+
+async function changePassword() {
+  if (!currentPassword.value || !newPassword.value || !confirmNewPassword.value) {
+    alert('Wypełnij wszystkie pola')
+    return
+  }
+
+  if (newPassword.value !== confirmNewPassword.value) {
+    alert('Nowe hasła nie są zgodne')
+    return
+  }
+
+  if (newPassword.value.length < 6) {
+    alert('Hasło musi mieć co najmniej 6 znaków')
+    return
+  }
+
+  try {
+    const response = await api.put('/user/password', {
+      current_password: currentPassword.value,
+      password: newPassword.value
+    })
+
+    console.log('Password changed:', response.data)
+    alert('Hasło zostało zmienione pomyślnie')
+    closePasswordChange()
+  } catch (error: any) {
+    console.error('Error changing password:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas zmiany hasła: ' + (error.response?.data?.message || error.message))
+  }
+}
+
+function openPasswordChange() {
+  showPasswordChange.value = true
+}
+
+function closePasswordChange() {
+  showPasswordChange.value = false
+  currentPassword.value = ''
+  newPassword.value = ''
+  confirmNewPassword.value = ''
 }
 
 // General settings
@@ -367,12 +417,26 @@ const resetSettings = () => {
         <p class="mb-4 text-gray-600 text-sm">
           Skonfiguruj aplikację uwierzytelniającą (np. Google Authenticator) dla zwiększenia bezpieczeństwa konta.
         </p>
-        <BaseButton 
+        <BaseButton
           @click="setupTwoFactor"
           :loading="authStore.loading"
           variant="primary"
         >
           📱 Skonfiguruj 2FA
+        </BaseButton>
+      </div>
+
+      <!-- Password Change Section -->
+      <div class="mt-6 pt-6 border-gray-200 border-t">
+        <h3 class="mb-3 font-medium text-gray-800">Zmiana hasła</h3>
+        <p class="mb-4 text-gray-600 text-sm">
+          Zmień swoje hasło dla zwiększenia bezpieczeństwa konta.
+        </p>
+        <BaseButton
+          @click="openPasswordChange"
+          variant="secondary"
+        >
+          🔐 Zmień hasło
         </BaseButton>
       </div>
     </section>
@@ -381,24 +445,72 @@ const resetSettings = () => {
     <div v-if="show2FASetup" class="z-50 fixed inset-0 flex justify-center items-center bg-black/50">
       <BaseCard class="mx-4 p-6 w-full max-w-lg">
         <h3 class="mb-4 font-bold text-xl">Konfiguracja 2FA</h3>
-        
+
         <div v-if="twoFAQRCode" class="mb-4">
           <p class="mb-2 text-gray-600 text-sm">Zeskanuj kod QR w aplikacji uwierzytelniającej:</p>
           <div class="flex justify-center bg-white p-4 rounded-lg" v-html="twoFAQRCode"></div>
         </div>
-        
+
         <div v-if="twoFARecoveryCodes.length > 0" class="mb-4">
           <p class="mb-2 text-gray-600 text-sm">Kody odzyskiwania (zapisz je w bezpiecznym miejscu):</p>
           <div class="bg-gray-100 p-3 rounded">
             <code v-for="(code, index) in twoFARecoveryCodes" :key="index" class="block mb-1 text-sm">{{ code }}</code>
           </div>
         </div>
-        
+
         <div class="flex gap-3">
           <BaseButton @click="close2FASetup" variant="secondary" class="flex-1">
             Zamknij
           </BaseButton>
         </div>
+      </BaseCard>
+    </div>
+
+    <!-- Password Change Modal -->
+    <div v-if="showPasswordChange" class="z-50 fixed inset-0 flex justify-center items-center bg-black/50">
+      <BaseCard class="mx-4 p-6 w-full max-w-lg">
+        <h3 class="mb-4 font-bold text-xl">Zmiana hasła</h3>
+
+        <form @submit.prevent="changePassword" class="space-y-4">
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Aktualne hasło</label>
+            <input
+              v-model="currentPassword"
+              type="password"
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              required
+            >
+          </div>
+
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Nowe hasło</label>
+            <input
+              v-model="newPassword"
+              type="password"
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              required
+            >
+          </div>
+
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Potwierdź nowe hasło</label>
+            <input
+              v-model="confirmNewPassword"
+              type="password"
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              required
+            >
+          </div>
+
+          <div class="flex gap-3">
+            <BaseButton type="submit" variant="primary" class="flex-1">
+              Zmień hasło
+            </BaseButton>
+            <BaseButton type="button" @click="closePasswordChange" variant="secondary" class="flex-1">
+              Anuluj
+            </BaseButton>
+          </div>
+        </form>
       </BaseCard>
     </div>
 
