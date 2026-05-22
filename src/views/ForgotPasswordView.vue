@@ -11,18 +11,18 @@ const route = useRoute()
 const authStore = useAuthStore()
 
 const email = ref('')
-const token = ref('')
+const pin = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const showResetForm = ref(false)
 const showSuccess = ref(false)
 
-// Check if we have token in URL (reset link)
+// Check if we have pin in URL (reset link)
 onMounted(() => {
-  const urlToken = route.query.token as string
+  const urlPin = route.query.pin as string
   const urlEmail = route.query.email as string
-  if (urlToken && urlEmail) {
-    token.value = urlToken
+  if (urlPin && urlEmail) {
+    pin.value = urlPin
     email.value = urlEmail
     showResetForm.value = true
   }
@@ -61,7 +61,7 @@ async function handleResetPassword() {
     return
   }
 
-  const success = await authStore.resetPassword(token.value, email.value, newPassword.value)
+  const success = await authStore.resetPassword(pin.value, email.value, newPassword.value)
   if (success) {
     alert('Hasło zostało zmienione pomyślnie')
     router.push('/login')
@@ -122,10 +122,10 @@ function backToLogin() {
       <div v-else-if="showSuccess" class="space-y-4 text-center">
         <div class="text-6xl">📧</div>
         <p class="text-gray-600">
-          Link do resetowania hasła został wysłany na adres <strong>{{ email }}</strong>.
+          PIN do resetowania hasła został wysłany na adres <strong>{{ email }}</strong>.
         </p>
         <p class="text-gray-500 text-sm">
-          Sprawdź swoją skrzynkę odbiorczą i postępuj zgodnie z instrukcjami w emailu.
+          Sprawdź swoją skrzynkę odbiorczą i użyj PINa do zresetowania hasła.
         </p>
         <BaseButton
           type="button"
@@ -140,8 +140,17 @@ function backToLogin() {
       <!-- Reset Password Form -->
       <form v-else @submit.prevent="handleResetPassword" class="space-y-4">
         <p class="mb-4 text-gray-600 text-sm text-center">
-          Wprowadź nowe hasło dla konta <strong>{{ email }}</strong>.
+          Wprowadź PIN otrzymany w emailu oraz nowe hasło dla konta <strong>{{ email }}</strong>.
         </p>
+
+        <BaseInput
+          v-model="pin"
+          label="PIN z emaila"
+          type="text"
+          placeholder="np. 123456"
+          required
+          maxlength="6"
+        />
 
         <BaseInput
           v-model="newPassword"
