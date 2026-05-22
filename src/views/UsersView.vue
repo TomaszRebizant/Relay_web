@@ -61,12 +61,26 @@ interface EditForm {
   manager: string
 }
 
+interface AddUserForm {
+  name: string
+  email: string
+  password: string
+  role: string
+}
+
+interface ResetPasswordForm {
+  newPassword: string
+  confirmPassword: string
+}
+
 const users = ref<User[]>([])
 
 // Modal states
 const showDetailsModal = ref(false)
 const showEditModal = ref(false)
 const showReportsModal = ref(false)
+const showAddUserModal = ref(false)
+const showResetPasswordModal = ref(false)
 const selectedUser = ref<User | null>(null)
 const userReports = ref<UserFault[]>([])
 const userReportsLoading = ref(false)
@@ -118,6 +132,20 @@ const editForm = ref<EditForm>({
   address: '',
   position: '',
   manager: ''
+})
+
+// Form data for adding user
+const addUserForm = ref<AddUserForm>({
+  name: '',
+  email: '',
+  password: '',
+  role: 'user'
+})
+
+// Form data for password reset
+const resetPasswordForm = ref<ResetPasswordForm>({
+  newPassword: '',
+  confirmPassword: ''
 })
 
 const getStatusText = (status: string) => {
@@ -281,6 +309,44 @@ const closeEditModal = () => {
   selectedUser.value = null
 }
 
+const showAddUser = () => {
+  addUserForm.value = {
+    name: '',
+    email: '',
+    password: '',
+    role: 'user'
+  }
+  showAddUserModal.value = true
+}
+
+const closeAddUserModal = () => {
+  showAddUserModal.value = false
+  addUserForm.value = {
+    name: '',
+    email: '',
+    password: '',
+    role: 'user'
+  }
+}
+
+const showResetPassword = (user: User) => {
+  selectedUser.value = user
+  resetPasswordForm.value = {
+    newPassword: '',
+    confirmPassword: ''
+  }
+  showResetPasswordModal.value = true
+}
+
+const closeResetPasswordModal = () => {
+  showResetPasswordModal.value = false
+  selectedUser.value = null
+  resetPasswordForm.value = {
+    newPassword: '',
+    confirmPassword: ''
+  }
+}
+
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== 'Escape') return
 
@@ -296,6 +362,17 @@ const onKeyDown = (e: KeyboardEvent) => {
 
   if (showDetailsModal.value) {
     closeDetailsModal()
+    return
+  }
+
+  if (showAddUserModal.value) {
+    closeAddUserModal()
+    return
+  }
+
+  if (showResetPasswordModal.value) {
+    closeResetPasswordModal()
+    return
   }
 }
 
@@ -361,6 +438,85 @@ const deleteUser = async (userId: string) => {
     console.error('Error deleting user:', error)
     console.error('Error response:', error.response?.data)
     alert('Błąd podczas usuwania użytkownika: ' + (error.response?.data?.message || error.message))
+  }
+}
+
+const addUser = async () => {
+  if (!addUserForm.value.name || !addUserForm.value.email || !addUserForm.value.password) {
+    alert('Wypełnij wszystkie wymagane pola')
+    return
+  }
+
+  if (addUserForm.value.password.length < 6) {
+    alert('Hasło musi mieć co najmniej 6 znaków')
+    return
+  }
+
+  try {
+    // Map role to API flags
+    const roleFlags = {
+      is_admin: addUserForm.value.role === 'admin',
+      is_installer: addUserForm.value.role === 'installer',
+      is_service: addUserForm.value.role === 'technician'
+    }
+    
+    const userData = {
+      name: addUserForm.value.name,
+      email: addUserForm.value.email,
+      password: addUserForm.value.password,
+      ...roleFlags
+    }
+    
+    console.log('Creating user:', userData)
+    const response = await api.post('/users', userData)
+    console.log('User created:', response.data)
+    
+    // Refresh users list
+    await fetchUsers()
+    closeAddUserModal()
+    alert('Użytkownik został utworzony pomyślnie')
+  } catch (error: any) {
+    console.error('Error creating user:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas tworzenia użytkownika: ' + (error.response?.data?.message || error.message))
+  }
+}
+
+const resetPassword = async () => {
+  if (!selectedUser.value) return
+  
+  if (!resetPasswordForm.value.newPassword || !resetPasswordForm.value.confirmPassword) {
+    alert('Wypełnij oba pola hasła')
+    return
+  }
+
+  if (resetPasswordForm.value.newPassword !== resetPasswordForm.value.confirmPassword) {
+    alert('Hasła nie są zgodne')
+    return
+  }
+
+  if (resetPasswordForm.value.newPassword.length < 6) {
+    alert('Hasło musi mieć co najmniej 6 znaków')
+    return
+  }
+
+  try {
+    const numericId = selectedUser.value.id.replace('USR-', '')
+    
+    const passwordData = {
+      password: resetPasswordForm.value.newPassword
+    }
+    
+    console.log('Resetting password for user:', numericId)
+    const response = await api.patch(`/users/${numericId}/password`, passwordData)
+    console.log('Password reset:', response.data)
+    
+    closeResetPasswordModal()
+    alert('Hasło zostało zresetowane pomyślnie')
+  } catch (error: any) {
+    console.error('Error resetting password:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas resetowania hasła: ' + (error.response?.data?.message || error.message))
   }
 }
 </script>
@@ -488,7 +644,10 @@ const deleteUser = async (userId: string) => {
           </select>
         </div>
         
-        <button class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors">
+        <button 
+          @click="showAddUser"
+          class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
+        >
           + Dodaj użytkownika
         </button>
       </div>
@@ -568,6 +727,13 @@ const deleteUser = async (userId: string) => {
               class="flex-1 hover:bg-gray-50 px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors"
             >
               Edytuj
+            </button>
+            <button 
+              @click="showResetPassword(user)"
+              class="flex-1 bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg text-white text-sm transition-colors"
+              title="Reset hasła"
+            >
+              🔑 Reset
             </button>
             <button 
               @click="deleteUser(user.id)"
@@ -839,7 +1005,7 @@ const deleteUser = async (userId: string) => {
                 <h3 class="font-semibold text-slate-800">{{ report.title }}</h3>
                 <span 
                   :class="getReportStatusColor(report.status)"
-                  class="shrink-0 px-2 py-1 rounded-full font-medium text-white text-xs"
+                  class="px-2 py-1 rounded-full font-medium text-white text-xs shrink-0"
                 >
                   {{ getFaultStatusLabel(report.status) }}
                 </span>
@@ -864,6 +1030,140 @@ const deleteUser = async (userId: string) => {
           >
             Zamknij
           </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Add User Modal -->
+    <div v-if="showAddUserModal" class="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50">
+      <div class="bg-white shadow-xl mx-4 rounded-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
+        <div class="p-6 border-gray-200 border-b">
+          <div class="flex justify-between items-center">
+            <h2 class="font-semibold text-slate-800 text-xl">Dodaj użytkownika</h2>
+            <button @click="closeAddUserModal" class="text-gray-400 hover:text-gray-600">
+              <span class="text-2xl">✕</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="p-6">
+          <form @submit.prevent="addUser" class="space-y-4">
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Imię i nazwisko</label>
+              <input 
+                v-model="addUserForm.name" 
+                type="text" 
+                required
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+            </div>
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Email</label>
+              <input 
+                v-model="addUserForm.email" 
+                type="email" 
+                required
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+            </div>
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Hasło</label>
+              <input 
+                v-model="addUserForm.password" 
+                type="password" 
+                required
+                minlength="6"
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+              <p class="mt-1 text-gray-500 text-xs">Minimum 6 znaków</p>
+            </div>
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Rola</label>
+              <select
+                v-model="addUserForm.role"
+                required
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+                <option value="user">Użytkownik</option>
+                <option value="technician">Technik Serwisowy</option>
+                <option value="installer">Instalator</option>
+                <option value="admin">Administrator</option>
+              </select>
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+              <button 
+                type="submit" 
+                class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
+              >
+                Utwórz użytkownika
+              </button>
+              <button 
+                type="button" 
+                @click="closeAddUserModal"
+                class="flex-1 hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+              >
+                Anuluj
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>
+
+    <!-- Reset Password Modal -->
+    <div v-if="showResetPasswordModal && selectedUser" class="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50">
+      <div class="bg-white shadow-xl mx-4 rounded-xl w-full max-w-md">
+        <div class="p-6 border-gray-200 border-b">
+          <div class="flex justify-between items-center">
+            <h2 class="font-semibold text-slate-800 text-xl">Reset hasła</h2>
+            <button @click="closeResetPasswordModal" class="text-gray-400 hover:text-gray-600">
+              <span class="text-2xl">✕</span>
+            </button>
+          </div>
+        </div>
+        
+        <div class="p-6">
+          <p class="mb-4 text-gray-600">Resetuj hasło dla użytkownika: <strong>{{ selectedUser.name }}</strong></p>
+          
+          <form @submit.prevent="resetPassword" class="space-y-4">
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Nowe hasło</label>
+              <input 
+                v-model="resetPasswordForm.newPassword" 
+                type="password" 
+                required
+                minlength="6"
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+            </div>
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Potwierdź hasło</label>
+              <input 
+                v-model="resetPasswordForm.confirmPassword" 
+                type="password" 
+                required
+                minlength="6"
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              >
+            </div>
+            
+            <div class="flex gap-3 pt-4">
+              <button 
+                type="submit" 
+                class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
+              >
+                Zresetuj hasło
+              </button>
+              <button 
+                type="button" 
+                @click="closeResetPasswordModal"
+                class="flex-1 hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+              >
+                Anuluj
+              </button>
+            </div>
+          </form>
         </div>
       </div>
     </div>
