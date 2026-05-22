@@ -14,7 +14,6 @@ const name = ref('')
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
-const role = ref('technician')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -30,20 +29,12 @@ async function handleRegister() {
   }
   
   try {
-    console.log('Attempting registration with:', { name: name.value, email: email.value, role: role.value })
-    
-    // Map role to API flags
-    const roleFlags = {
-      is_admin: role.value === 'admin',
-      is_installer: role.value === 'installer',
-      is_service: role.value === 'technician'
-    }
+    console.log('Attempting registration with:', { name: name.value, email: email.value })
     
     const response = await api.post('/register', {
       name: name.value,
       email: email.value,
-      password: password.value,
-      ...roleFlags
+      password: password.value
     })
 
     console.log('Registration response:', response.data)
@@ -100,18 +91,6 @@ async function handleRegister() {
           placeholder="••••••••"
           required
         />
-        
-        <div>
-          <label class="block mb-1 font-medium text-gray-700 text-sm">Rola</label>
-          <select
-            v-model="role"
-            required
-            class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
-          >
-            <option value="technician">Technik Serwisowy</option>
-            <option value="installer">Instalator</option>
-          </select>
-        </div>
         
         <p v-if="error" class="text-red-500 text-sm text-center">
           {{ error }}
