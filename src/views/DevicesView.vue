@@ -386,45 +386,35 @@ onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
 })
 
-const addDevice = () => {
-  const newId = `DEV-${String(devices.value.length + 1).padStart(3, '0')}`
-  const newDevice: Device = {
-    id: newId,
-    name: addForm.value.name,
-    type: addForm.value.type,
-    location: addForm.value.location,
-    status: addForm.value.status,
-    lastMaintenance: addForm.value.lastMaintenance,
-    nextMaintenance: addForm.value.nextMaintenance,
-    temperature: addForm.value.temperature || '--',
-    humidity: addForm.value.humidity || '--',
-    energyUsage: addForm.value.energyUsage || '--',
-    icon: getDeviceIcon(addForm.value.type),
-    statusColor: addForm.value.status === 'working' ? 'bg-green-500' : 
-                addForm.value.status === 'maintenance' ? 'bg-amber-500' : 'bg-red-500',
-    serialNumber: addForm.value.serialNumber,
-    manufacturer: addForm.value.manufacturer,
-    model: addForm.value.model,
-    installationDate: addForm.value.installationDate,
-    warrantyExpiry: addForm.value.warrantyExpiry,
-    description: addForm.value.description,
-    notes: addForm.value.notes,
-    responsiblePerson: addForm.value.responsiblePerson,
-    department: addForm.value.department
+const addDevice = async () => {
+  try {
+    // Generate UUID for new device
+    const uuid = crypto.randomUUID()
+    
+    // Map UI form to API format
+    const apiData = {
+      uuid,
+      name: addForm.value.name,
+      type: addForm.value.type,
+      model: addForm.value.model,
+      brand: addForm.value.manufacturer,
+      serial_number: addForm.value.serialNumber,
+      location: addForm.value.location,
+      installation_date: addForm.value.installationDate || new Date().toISOString(),
+      notes: addForm.value.notes
+    }
+    
+    const response = await api.post('/devices', apiData)
+    console.log('Device created:', response.data)
+    
+    // Refresh devices list
+    await fetchDevices()
+    
+    closeAddModal()
+  } catch (error: any) {
+    console.error('Error creating device:', error)
+    alert('Nie udało się utworzyć urządzenia: ' + (error.response?.data?.message || error.message))
   }
-  
-  devices.value.unshift(newDevice)
-  applyFilters()
-  
-  // Update stats
-  stats.value = {
-    total: devices.value.length,
-    working: devices.value.filter(d => d.status === 'working').length,
-    maintenance: devices.value.filter(d => d.status === 'maintenance').length,
-    broken: devices.value.filter(d => d.status === 'broken').length
-  }
-  
-  closeAddModal()
 }
 
 const saveDevice = async () => {
