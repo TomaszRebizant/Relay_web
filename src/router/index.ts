@@ -71,11 +71,6 @@ router.beforeEach((to, from, next) => {
   
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
-  } else if (to.meta.requiresAuth && authStore.isAuthenticated && !authStore.isAdmin && !authStore.isService && !authStore.isInstaller) {
-    // Users without any role are not allowed
-    alert('Brak uprawnień. Skontaktuj się z administratorem.')
-    authStore.logout()
-    next('/login')
   } else if ((to.path === '/login' || to.path === '/register') && authStore.isAuthenticated) {
     next('/')
   } else {

@@ -80,7 +80,7 @@ describe('Router configuration', () => {
     expect(slaRoute).toBeUndefined()
   })
 
-  describe('navigation guard - admin only access', () => {
+  describe('navigation guard - authentication', () => {
     it('should redirect to login if not authenticated', async () => {
       const authStore = useAuthStore()
       authStore.user = null
@@ -91,19 +91,9 @@ describe('Router configuration', () => {
       expect(router.currentRoute.value.path).toBe('/login')
     })
 
-    it('should redirect to login if authenticated but not admin', async () => {
+    it('should allow access if authenticated (any role)', async () => {
       const authStore = useAuthStore()
-      authStore.user = { id: 1, name: 'John', email: 'john@example.com', is_admin: false }
-      authStore.token = 'test-token'
-
-      await router.push('/devices')
-      
-      expect(router.currentRoute.value.path).toBe('/login')
-    })
-
-    it('should allow access if authenticated and admin', async () => {
-      const authStore = useAuthStore()
-      authStore.user = { id: 1, name: 'John', email: 'john@example.com', is_admin: true }
+      authStore.user = { id: 1, name: 'John', email: 'john@example.com', is_service: true }
       authStore.token = 'test-token'
 
       await router.push('/devices')
@@ -113,7 +103,7 @@ describe('Router configuration', () => {
 
     it('should redirect authenticated users away from login', async () => {
       const authStore = useAuthStore()
-      authStore.user = { id: 1, name: 'John', email: 'john@example.com', is_admin: true }
+      authStore.user = { id: 1, name: 'John', email: 'john@example.com' }
       authStore.token = 'test-token'
 
       await router.push('/login')
@@ -123,7 +113,7 @@ describe('Router configuration', () => {
 
     it('should redirect authenticated users away from register', async () => {
       const authStore = useAuthStore()
-      authStore.user = { id: 1, name: 'John', email: 'john@example.com', is_admin: true }
+      authStore.user = { id: 1, name: 'John', email: 'john@example.com' }
       authStore.token = 'test-token'
 
       await router.push('/register')
