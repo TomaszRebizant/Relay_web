@@ -21,6 +21,11 @@ const router = createRouter({
       component: () => import('../views/ForgotPasswordView.vue'),
     },
     {
+      path: '/auth/google/callback',
+      name: 'google-callback',
+      component: () => import('../views/GoogleCallbackView.vue'),
+    },
+    {
       path: '/report',
       name: 'report',
       component: () => import('../views/AnonymousReportView.vue'),
@@ -76,7 +81,7 @@ router.beforeEach((to) => {
   
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     return '/login'
-  } else if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password') && authStore.isAuthenticated) {
+  } else if ((to.path === '/login' || to.path === '/register' || to.path === '/forgot-password' || to.path === '/auth/google/callback') && authStore.isAuthenticated) {
     return '/'
   }
 })
