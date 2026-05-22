@@ -107,7 +107,13 @@ const fetchReports = async () => {
   apiError.value = ''
 
   try {
-    const response = await api.get('/faults')
+    // Add pagination to reduce data load
+    const response = await api.get('/faults', {
+      params: {
+        page: 1,
+        per_page: 100
+      }
+    })
     const faults = unwrapList<ApiFault>(response.data)
 
     let deviceTechnicianMap = new Map<string, ApiUserBrief>()

@@ -94,9 +94,17 @@ export const unwrapList = <T>(data: unknown): T[] => {
 }
 
 export const fetchServiceTechnicians = async (): Promise<ApiUserBrief[]> => {
-  const response = await api.get('/users')
-  const users = unwrapList<ApiUserBrief>(response.data)
-  return users.filter((user) => user.is_service)
+  try {
+    const response = await api.get('/users')
+    const users = unwrapList<ApiUserBrief>(response.data)
+    return users.filter((user) => user.is_service)
+  } catch (error: any) {
+    console.error('Error fetching service technicians:', error)
+    if (error.response?.status === 403) {
+      console.warn('User does not have permission to fetch all users')
+    }
+    return []
+  }
 }
 
 /** Mapuje urządzenie → technik na podstawie GET /users/{id}/devices (mniej zapytań niż /devices/{uuid}/users). */
