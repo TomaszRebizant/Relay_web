@@ -20,7 +20,13 @@ async function handleLogin() {
   if (result === '2fa_required') {
     show2FA.value = true
   } else if (result === true) {
-    router.push('/')
+    // Wait a moment to ensure auth state is set
+    setTimeout(() => {
+      router.push('/')
+    }, 100)
+  } else {
+    // Login failed - error is in authStore.error
+    console.error('Login failed:', authStore.error)
   }
 }
 
@@ -63,9 +69,11 @@ function backToLogin() {
           required
         />
         
-        <p v-if="authStore.error" class="text-red-500 text-sm text-center">
-          {{ authStore.error }}
-        </p>
+        <div v-if="authStore.error" class="bg-red-50 mb-4 p-3 border border-red-200 rounded-lg">
+          <p class="font-medium text-red-700 text-sm text-center">
+            {{ authStore.error }}
+          </p>
+        </div>
         
         <BaseButton
           type="submit"
@@ -91,9 +99,11 @@ function backToLogin() {
           maxlength="6"
         />
         
-        <p v-if="authStore.error" class="text-red-500 text-sm text-center">
-          {{ authStore.error }}
-        </p>
+        <div v-if="authStore.error" class="bg-red-50 mb-4 p-3 border border-red-200 rounded-lg">
+          <p class="font-medium text-red-700 text-sm text-center">
+            {{ authStore.error }}
+          </p>
+        </div>
         
         <BaseButton
           type="submit"
