@@ -33,13 +33,13 @@ const menuItems = computed(() => {
       roles: ['admin', 'service']
     },
     {
-      icon: '�',
+      icon: '🔨',
       label: 'Instalacje',
       route: '/installer',
       roles: ['admin', 'installer']
     },
     {
-      icon: '�👥',
+      icon: '👥',
       label: 'Użytkownicy',
       route: '/users',
       roles: ['admin']
@@ -57,7 +57,8 @@ const menuItems = computed(() => {
     if (authStore.isAdmin) return item.roles.includes('admin')
     if (authStore.isService) return item.roles.includes('service')
     if (authStore.isInstaller) return item.roles.includes('installer')
-    return false
+    // If user has no role, show basic items (dashboard, devices)
+    return ['/', '/devices'].includes(item.route)
   })
 })
 

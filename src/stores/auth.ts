@@ -43,6 +43,10 @@ export const useAuthStore = defineStore('auth', () => {
         user.value = response.data.user || { email, token: authToken }
         localStorage.setItem('auth_token', authToken)
         console.log('Login successful, token saved')
+        console.log('User data:', user.value)
+        console.log('is_admin:', user.value?.is_admin)
+        console.log('is_service:', user.value?.is_service)
+        console.log('is_installer:', user.value?.is_installer)
         return true
       }
       
