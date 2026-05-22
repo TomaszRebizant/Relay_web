@@ -23,6 +23,12 @@ describe('Sidebar component', () => {
         { path: '/settings', component: { template: '<div>Settings</div>' } },
       ],
     })
+    
+    vi.clearAllMocks()
+    
+    // Set up admin user so menu items appear
+    const authStore = useAuthStore()
+    authStore.user = { id: 1, name: 'Admin User', email: 'admin@example.com', is_admin: true }
   })
 
   it('should render sidebar with menu items', () => {
@@ -118,7 +124,8 @@ describe('Sidebar component', () => {
     })
 
     const devicesLink = wrapper.findAll('a').find((link) => link.text().includes('Urządzenia'))
-    expect(devicesLink?.classes()).toContain('bg-white/15')
-    expect(devicesLink?.classes()).toContain('border-l-blue-500')
+    const linkClasses = devicesLink?.classes() || []
+    expect(linkClasses).toContain('bg-white/15')
+    expect(linkClasses).toContain('border-l-blue-500')
   })
 })

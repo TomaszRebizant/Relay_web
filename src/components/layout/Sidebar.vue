@@ -12,33 +12,54 @@ function handleLogout() {
   router.push('/login')
 }
 
-const menuItems = ref([
-  {
-    icon: '📊',
-    label: 'Dashboard',
-    route: '/',
-  },
-  {
-    icon: '🔧',
-    label: 'Urządzenia',
-    route: '/devices',
-  },
-  {
-    icon: '📝',
-    label: 'Zgłoszenia',
-    route: '/reports',
-  },
-  {
-    icon: '👥',
-    label: 'Użytkownicy',
-    route: '/users',
-  },
-  {
-    icon: '⚙️',
-    label: 'Ustawienia',
-    route: '/settings',
-  }
-])
+const menuItems = computed(() => {
+  const items = [
+    {
+      icon: '📊',
+      label: 'Dashboard',
+      route: '/',
+      roles: ['admin', 'service', 'installer']
+    },
+    {
+      icon: '🔧',
+      label: 'Urządzenia',
+      route: '/devices',
+      roles: ['admin', 'service', 'installer']
+    },
+    {
+      icon: '📝',
+      label: 'Zgłoszenia',
+      route: '/reports',
+      roles: ['admin', 'service']
+    },
+    {
+      icon: '�',
+      label: 'Instalacje',
+      route: '/installer',
+      roles: ['admin', 'installer']
+    },
+    {
+      icon: '�👥',
+      label: 'Użytkownicy',
+      route: '/users',
+      roles: ['admin']
+    },
+    {
+      icon: '⚙️',
+      label: 'Ustawienia',
+      route: '/settings',
+      roles: ['admin']
+    }
+  ]
+
+  // Filter items based on user role
+  return items.filter(item => {
+    if (authStore.isAdmin) return item.roles.includes('admin')
+    if (authStore.isService) return item.roles.includes('service')
+    if (authStore.isInstaller) return item.roles.includes('installer')
+    return false
+  })
+})
 
 const isActive = (itemRoute: string) => {
   if (itemRoute === '/') {
@@ -78,8 +99,10 @@ const isActive = (itemRoute: string) => {
           👤
         </div>
         <div class="flex-1">
-          <div class="font-semibold text-gray-100 text-sm">{{ authStore.user?.name || authStore.user?.email || 'Admin User' }}</div>
-          <div class="text-white/60 text-xs">{{ authStore.user?.is_admin ? 'Administrator' : 'Użytkownik' }}</div>
+          <div class="font-semibold text-gray-100 text-sm">{{ authStore.user?.name || authStore.user?.email || 'Użytkownik' }}</div>
+          <div class="text-white/60 text-xs">
+            {{ authStore.isAdmin ? 'Administrator' : authStore.isService ? 'Serwisant' : authStore.isInstaller ? 'Instalator' : 'Użytkownik' }}
+          </div>
         </div>
       </div>
       <button 

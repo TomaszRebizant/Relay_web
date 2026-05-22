@@ -39,6 +39,12 @@ const router = createRouter({
       meta: { requiresAuth: true }
     },
     {
+      path: '/installer',
+      name: 'installer',
+      component: () => import('../views/InstallerView.vue'),
+      meta: { requiresAuth: true }
+    },
+    {
       path: '/users',
       name: 'users',
       component: () => import('../views/UsersView.vue'),
@@ -65,9 +71,9 @@ router.beforeEach((to, from, next) => {
   
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
     next('/login')
-  } else if (to.meta.requiresAuth && authStore.isAuthenticated && !authStore.user?.is_admin) {
-    // Non-admin users are not allowed
-    alert('Dostęp tylko dla administratorów')
+  } else if (to.meta.requiresAuth && authStore.isAuthenticated && !authStore.isAdmin && !authStore.isService && !authStore.isInstaller) {
+    // Users without any role are not allowed
+    alert('Brak uprawnień. Skontaktuj się z administratorem.')
     authStore.logout()
     next('/login')
   } else if ((to.path === '/login' || to.path === '/register') && authStore.isAuthenticated) {

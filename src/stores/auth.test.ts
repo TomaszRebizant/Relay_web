@@ -208,4 +208,42 @@ describe('auth store', () => {
       expect(store.token).toBeFalsy()
     })
   })
+
+  describe('role checks', () => {
+    it('should identify admin user', () => {
+      const store = useAuthStore()
+      store.user = { id: 1, name: 'Admin', email: 'admin@example.com', is_admin: true }
+
+      expect(store.isAdmin).toBe(true)
+      expect(store.isService).toBe(false)
+      expect(store.isInstaller).toBe(false)
+    })
+
+    it('should identify service technician', () => {
+      const store = useAuthStore()
+      store.user = { id: 2, name: 'Service', email: 'service@example.com', is_service: true }
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isService).toBe(true)
+      expect(store.isInstaller).toBe(false)
+    })
+
+    it('should identify installer', () => {
+      const store = useAuthStore()
+      store.user = { id: 3, name: 'Installer', email: 'installer@example.com', is_installer: true }
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isService).toBe(false)
+      expect(store.isInstaller).toBe(true)
+    })
+
+    it('should handle user without role', () => {
+      const store = useAuthStore()
+      store.user = { id: 4, name: 'User', email: 'user@example.com' }
+
+      expect(store.isAdmin).toBe(false)
+      expect(store.isService).toBe(false)
+      expect(store.isInstaller).toBe(false)
+    })
+  })
 })

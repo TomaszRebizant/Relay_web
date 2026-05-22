@@ -16,7 +16,7 @@ describe('Router configuration', () => {
   it('should have defined routes', () => {
     const routes = router.getRoutes()
     
-    expect(routes).toHaveLength(9) // login, register, home, devices, reports, users, settings, about, plus one more
+    expect(routes).toHaveLength(10) // login, register, home, devices, reports, installer, users, settings, about
   })
 
   it('should have login route', () => {

@@ -11,6 +11,9 @@ export const useAuthStore = defineStore('auth', () => {
   const error = ref<string | null>(null)
 
   const isAuthenticated = computed(() => !!token.value)
+  const isAdmin = computed(() => user.value?.is_admin === true)
+  const isService = computed(() => user.value?.is_service === true)
+  const isInstaller = computed(() => user.value?.is_installer === true)
 
   async function login(email: string, password: string) {
     loading.value = true
@@ -133,6 +136,9 @@ export const useAuthStore = defineStore('auth', () => {
     loading,
     error,
     isAuthenticated,
+    isAdmin,
+    isService,
+    isInstaller,
     login,
     verify2FA,
     setup2FA,
