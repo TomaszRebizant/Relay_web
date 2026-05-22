@@ -13,13 +13,21 @@ const authStore = useAuthStore()
 const name = ref('')
 const email = ref('')
 const password = ref('')
-const role = ref('user')
+const confirmPassword = ref('')
+const role = ref('technician')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
 async function handleRegister() {
   loading.value = true
   error.value = null
+  
+  // Validate password confirmation
+  if (password.value !== confirmPassword.value) {
+    error.value = 'The password field confirmation does not match.'
+    loading.value = false
+    return
+  }
   
   try {
     console.log('Attempting registration with:', { name: name.value, email: email.value, role: role.value })
@@ -85,6 +93,14 @@ async function handleRegister() {
           required
         />
         
+        <BaseInput
+          v-model="confirmPassword"
+          label="Potwierdź hasło"
+          type="password"
+          placeholder="••••••••"
+          required
+        />
+        
         <div>
           <label class="block mb-1 font-medium text-gray-700 text-sm">Rola</label>
           <select
@@ -92,7 +108,6 @@ async function handleRegister() {
             required
             class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
           >
-            <option value="user">Użytkownik</option>
             <option value="technician">Technik Serwisowy</option>
             <option value="installer">Instalator</option>
           </select>
