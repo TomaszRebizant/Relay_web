@@ -15,7 +15,6 @@ const pin = ref('')
 const newPassword = ref('')
 const confirmPassword = ref('')
 const showResetForm = ref(false)
-const showSuccess = ref(false)
 
 // Check if we have pin in URL (reset link)
 onMounted(() => {
@@ -39,7 +38,7 @@ async function handleRequestReset() {
   console.log('Password reset request success:', success)
 
   if (success) {
-    showSuccess.value = true
+    showResetForm.value = true
   } else {
     console.error('Password reset failed with error:', authStore.error)
   }
@@ -81,9 +80,9 @@ function backToLogin() {
       </h1>
 
       <!-- Request Reset Form -->
-      <form v-if="!showResetForm && !showSuccess" @submit.prevent="handleRequestReset" class="space-y-4">
+      <form v-if="!showResetForm" @submit.prevent="handleRequestReset" class="space-y-4">
         <p class="mb-4 text-gray-600 text-sm text-center">
-          Wprowadź swój adres email, a wyślemy Ci link do resetowania hasła.
+          Wprowadź swój adres email, a wyślemy Ci PIN do resetowania hasła.
         </p>
 
         <BaseInput
@@ -105,7 +104,7 @@ function backToLogin() {
           class="w-full"
           :loading="authStore.loading"
         >
-          Wyślij link resetujący
+          Wyślij PIN
         </BaseButton>
 
         <BaseButton
@@ -117,25 +116,6 @@ function backToLogin() {
           Wróć do logowania
         </BaseButton>
       </form>
-
-      <!-- Success Message -->
-      <div v-else-if="showSuccess" class="space-y-4 text-center">
-        <div class="text-6xl">📧</div>
-        <p class="text-gray-600">
-          PIN do resetowania hasła został wysłany na adres <strong>{{ email }}</strong>.
-        </p>
-        <p class="text-gray-500 text-sm">
-          Sprawdź swoją skrzynkę odbiorczą i użyj PINa do zresetowania hasła.
-        </p>
-        <BaseButton
-          type="button"
-          variant="secondary"
-          class="w-full"
-          @click="backToLogin"
-        >
-          Wróć do logowania
-        </BaseButton>
-      </div>
 
       <!-- Reset Password Form -->
       <form v-else @submit.prevent="handleResetPassword" class="space-y-4">
