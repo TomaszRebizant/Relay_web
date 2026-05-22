@@ -65,16 +65,14 @@ const router = createRouter({
   ],
 })
 
-router.beforeEach((to, from, next) => {
+router.beforeEach((to) => {
   const authStore = useAuthStore()
   authStore.initAuth()
   
   if (to.meta.requiresAuth && !authStore.isAuthenticated) {
-    next('/login')
+    return '/login'
   } else if ((to.path === '/login' || to.path === '/register') && authStore.isAuthenticated) {
-    next('/')
-  } else {
-    next()
+    return '/'
   }
 })
 
