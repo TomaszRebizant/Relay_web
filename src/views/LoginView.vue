@@ -107,6 +107,12 @@ async function handleGoogleLogin(response: any) {
           Zaloguj się
         </BaseButton>
 
+        <div class="mt-4 text-center">
+          <router-link to="/forgot-password" class="font-medium text-blue-500 hover:text-blue-700 hover:underline">
+            Zapomniałeś hasła?
+          </router-link>
+        </div>
+
         <!-- Google Sign-In Button -->
         <div class="mt-4">
           <div id="g_id_onload"
@@ -125,15 +131,6 @@ async function handleGoogleLogin(response: any) {
                data-logo_alignment="left">
           </div>
         </div>
-
-        <BaseButton
-          type="button"
-          variant="secondary"
-          class="mt-4 w-full"
-          @click="router.push('/forgot-password')"
-        >
-          Zapomniałeś hasła?
-        </BaseButton>
       </form>
       
       <!-- 2FA Form -->
