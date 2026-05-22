@@ -729,13 +729,6 @@ const resetPassword = async () => {
               Edytuj
             </button>
             <button 
-              @click="showResetPassword(user)"
-              class="flex-1 bg-amber-500 hover:bg-amber-600 px-3 py-2 rounded-lg text-white text-sm transition-colors"
-              title="Reset hasła"
-            >
-              🔑 Reset
-            </button>
-            <button 
               @click="deleteUser(user.id)"
               class="hover:bg-red-50 px-3 py-2 border border-red-300 rounded-lg text-red-600 text-sm transition-colors"
               title="Usuń użytkownika"
@@ -947,6 +940,13 @@ const resetPassword = async () => {
             </div>
             
             <div class="flex gap-3 pt-4">
+              <button 
+                type="button"
+                @click="showResetPassword(selectedUser!)"
+                class="bg-amber-500 hover:bg-amber-600 px-4 py-2 rounded-lg text-white transition-colors"
+              >
+                🔑 Reset hasła
+              </button>
               <button 
                 type="submit" 
                 class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
