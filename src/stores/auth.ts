@@ -183,16 +183,17 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  async function resetPassword(token: string, email: string, password: string) {
+  async function resetPassword(pin: string, email: string, password: string) {
     loading.value = true
     error.value = null
 
     try {
-      console.log('Resetting password with:', { token, email, passwordLength: password.length })
+      console.log('Resetting password with:', { pin, email, passwordLength: password.length })
       const response = await api.post('/public/mobile/password/reset', {
-        token,
+        pin,
         email,
-        password
+        password,
+        password_confirmation: password
       })
 
       console.log('Password reset response:', response.data)
