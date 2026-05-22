@@ -167,7 +167,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       console.log('Requesting password reset for:', email)
-      const response = await api.post('/password/email', {
+      const response = await api.post('/public/mobile/password/email', {
         email
       })
 
@@ -189,7 +189,7 @@ export const useAuthStore = defineStore('auth', () => {
 
     try {
       console.log('Resetting password with token')
-      const response = await api.post('/password/reset', {
+      const response = await api.post('/public/mobile/password/reset', {
         token,
         email,
         password

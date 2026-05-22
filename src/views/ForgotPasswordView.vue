@@ -34,9 +34,14 @@ async function handleRequestReset() {
     return
   }
 
+  console.log('Requesting password reset for email:', email.value)
   const success = await authStore.requestPasswordReset(email.value)
+  console.log('Password reset request success:', success)
+
   if (success) {
     showSuccess.value = true
+  } else {
+    console.error('Password reset failed with error:', authStore.error)
   }
 }
 
