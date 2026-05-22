@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue'
+import { useAuthStore } from '@/stores/auth'
 import { useTechnicians, technicians } from '@/composables/useTechnicians'
 import api from '@/utils/api'
 import {
@@ -14,6 +15,7 @@ import {
   updateFaultStatus
 } from '@/utils/faults'
 
+const authStore = useAuthStore()
 const {
   fetchTechnicians,
   techniciansLoading,
@@ -118,7 +120,7 @@ const fetchReports = async () => {
 
     let deviceTechnicianMap = new Map<string, ApiUserBrief>()
     try {
-      deviceTechnicianMap = await fetchDeviceTechnicianMap()
+      deviceTechnicianMap = await fetchDeviceTechnicianMap(authStore.isAdmin)
     } catch (mapError: unknown) {
       console.warn('Nie udało się pobrać przypisań techników:', mapError)
     }

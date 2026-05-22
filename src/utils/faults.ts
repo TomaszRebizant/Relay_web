@@ -101,15 +101,22 @@ export const fetchServiceTechnicians = async (): Promise<ApiUserBrief[]> => {
   } catch (error: any) {
     console.error('Error fetching service technicians:', error)
     if (error.response?.status === 403) {
-      console.warn('User does not have permission to fetch all users')
+      console.warn('User does not have permission to fetch all users - skipping technician assignments')
     }
     return []
   }
 }
 
 /** Mapuje urządzenie → technik na podstawie GET /users/{id}/devices (mniej zapytań niż /devices/{uuid}/users). */
-export const fetchDeviceTechnicianMap = async (): Promise<Map<string, ApiUserBrief>> => {
+export const fetchDeviceTechnicianMap = async (isAdmin: boolean = false): Promise<Map<string, ApiUserBrief>> => {
   const map = new Map<string, ApiUserBrief>()
+  
+  // Only fetch technicians if user is admin
+  if (!isAdmin) {
+    console.log('Skipping technician map fetch - user is not admin')
+    return map
+  }
+  
   const technicians = await fetchServiceTechnicians()
 
   await Promise.all(
