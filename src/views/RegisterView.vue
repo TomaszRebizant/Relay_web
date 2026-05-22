@@ -34,7 +34,8 @@ async function handleRegister() {
     const response = await api.post('/register', {
       name: name.value,
       email: email.value,
-      password: password.value
+      password: password.value,
+      password_confirmation: confirmPassword.value
     })
 
     console.log('Registration response:', response.data)
