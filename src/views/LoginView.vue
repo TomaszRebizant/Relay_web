@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '../stores/auth'
 import BaseInput from '../components/ui/BaseInput.vue'
@@ -14,9 +14,18 @@ const password = ref('')
 const twoFACode = ref('')
 const show2FA = ref(false)
 
+// Load Google Identity Services
+onMounted(() => {
+  const script = document.createElement('script')
+  script.src = 'https://accounts.google.com/gsi/client'
+  script.async = true
+  script.defer = true
+  document.head.appendChild(script)
+})
+
 async function handleLogin() {
   const result = await authStore.login(email.value, password.value)
-  
+
   if (result === '2fa_required') {
     show2FA.value = true
   } else if (result === true) {
@@ -41,6 +50,21 @@ function backToLogin() {
   show2FA.value = false
   twoFACode.value = ''
   authStore.requires2FA = false
+}
+
+async function handleGoogleLogin(response: any) {
+  const credential = response.credential
+  const result = await authStore.loginWithGoogle(credential)
+
+  if (result === '2fa_required') {
+    show2FA.value = true
+  } else if (result === true) {
+    setTimeout(() => {
+      router.push('/')
+    }, 100)
+  } else {
+    console.error('Google login failed:', authStore.error)
+  }
 }
 </script>
 
@@ -81,6 +105,34 @@ function backToLogin() {
           :loading="authStore.loading"
         >
           Zaloguj się
+        </BaseButton>
+
+        <!-- Google Sign-In Button -->
+        <div class="mt-4">
+          <div id="g_id_onload"
+               :data-client_id="import.meta.env.VITE_GOOGLE_CLIENT_ID"
+               data-context="signin"
+               data-ux_mode="popup"
+               data-callback="handleGoogleLogin"
+               data-auto_prompt="false">
+          </div>
+          <div class="g_id_signin"
+               data-type="standard"
+               data-shape="rectangular"
+               data-theme="outline"
+               data-text="signin_with"
+               data-size="large"
+               data-logo_alignment="left">
+          </div>
+        </div>
+
+        <BaseButton
+          type="button"
+          variant="secondary"
+          class="mt-4 w-full"
+          @click="router.push('/forgot-password')"
+        >
+          Zapomniałeś hasła?
         </BaseButton>
       </form>
       

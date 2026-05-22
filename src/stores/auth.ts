@@ -102,7 +102,7 @@ export const useAuthStore = defineStore('auth', () => {
   async function setup2FA() {
     loading.value = true
     error.value = null
-    
+
     try {
       console.log('Setting up 2FA')
       const response = await api.post('/auth/2fa/setup')
@@ -114,6 +114,94 @@ export const useAuthStore = defineStore('auth', () => {
       console.error('Error response:', err.response?.data)
       error.value = err.response?.data?.message || err.message || '2FA setup failed'
       return null
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function loginWithGoogle(providerToken: string) {
+    loading.value = true
+    error.value = null
+    requires2FA.value = false
+    intermediateToken.value = null
+
+    try {
+      console.log('Attempting Google login')
+      const response = await api.post('/auth/google', {
+        provider_token: providerToken
+      })
+
+      console.log('Google login response:', response.data)
+
+      if (response.data.requires_2fa) {
+        requires2FA.value = true
+        intermediateToken.value = response.data.intermediate_token
+        console.log('2FA required after Google login, intermediate token saved')
+        return '2fa_required'
+      }
+
+      if (response.data.access_token || response.data.token) {
+        const authToken = response.data.access_token || response.data.token
+        token.value = authToken
+        user.value = response.data.user || { email: user.value?.email || '', token: authToken }
+        localStorage.setItem('auth_token', authToken)
+        console.log('Google login successful, token saved')
+        return true
+      }
+
+      error.value = 'No token received from server'
+      return false
+    } catch (err: any) {
+      console.error('Google login error:', err)
+      console.error('Error response:', err.response?.data)
+      error.value = err.response?.data?.message || err.message || 'Google login failed'
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function requestPasswordReset(email: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      console.log('Requesting password reset for:', email)
+      const response = await api.post('/password/email', {
+        email
+      })
+
+      console.log('Password reset request response:', response.data)
+      return true
+    } catch (err: any) {
+      console.error('Password reset request error:', err)
+      console.error('Error response:', err.response?.data)
+      error.value = err.response?.data?.message || err.message || 'Password reset request failed'
+      return false
+    } finally {
+      loading.value = false
+    }
+  }
+
+  async function resetPassword(token: string, email: string, password: string) {
+    loading.value = true
+    error.value = null
+
+    try {
+      console.log('Resetting password with token')
+      const response = await api.post('/password/reset', {
+        token,
+        email,
+        password
+      })
+
+      console.log('Password reset response:', response.data)
+      return true
+    } catch (err: any) {
+      console.error('Password reset error:', err)
+      console.error('Error response:', err.response?.data)
+      error.value = err.response?.data?.message || err.message || 'Password reset failed'
+      return false
     } finally {
       loading.value = false
     }
@@ -146,6 +234,9 @@ export const useAuthStore = defineStore('auth', () => {
     login,
     verify2FA,
     setup2FA,
+    loginWithGoogle,
+    requestPasswordReset,
+    resetPassword,
     logout,
     initAuth
   }
