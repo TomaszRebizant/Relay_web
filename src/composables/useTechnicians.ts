@@ -1,7 +1,10 @@
-import { ref, computed, type Ref } from 'vue'
+import { ref, computed } from 'vue'
+import api from '@/utils/api'
+import { fetchServiceTechnicians, unwrapList, type ApiUserBrief } from '@/utils/faults'
 
 export interface Technician {
   id: string
+  apiId: number
   name: string
   role: string
   avatar: string
@@ -9,90 +12,75 @@ export interface Technician {
   email?: string
   department?: string
   status?: string
-  phone?: string
 }
 
-// Shared technicians data - synchronized between UsersView and ReportsView
-export const technicians = ref<Technician[]>([
-  { 
-    id: 'tech-1', 
-    name: 'Piotr Wiśniewski', 
-    role: 'Główny Technik', 
-    avatar: '👨‍🔧', 
-    activeReports: 2,
-    email: 'piotr.wisniewski@company.com',
-    department: 'Techniczny',
-    status: 'active',
-    phone: '+48 345 678 901'
-  },
-  { 
-    id: 'tech-2', 
-    name: 'Tomasz Lewandowski', 
-    role: 'Technik', 
-    avatar: '👨‍🔧', 
-    activeReports: 1,
-    email: 'tomasz.lewandowski@company.com',
-    department: 'Techniczny',
-    status: 'suspended',
-    phone: '+48 567 890 123'
-  },
-  { 
-    id: 'tech-3', 
-    name: 'Marek Kowalczyk', 
-    role: 'Technik', 
-    avatar: '👨‍🔧', 
-    activeReports: 0,
-    email: 'marek.kowalczyk@company.com',
-    department: 'Techniczny',
-    status: 'active',
-    phone: '+48 111 222 333'
-  },
-  { 
-    id: 'tech-4', 
-    name: 'Krzysztof Jankowski', 
-    role: 'Technik', 
-    avatar: '👨‍🔧', 
-    activeReports: 1,
-    email: 'krzysztof.jankowski@company.com',
-    department: 'Techniczny',
-    status: 'active',
-    phone: '+48 444 555 666'
+export const technicians = ref<Technician[]>([])
+export const techniciansLoading = ref(false)
+
+export const fetchTechnicians = async () => {
+  try {
+    techniciansLoading.value = true
+    const serviceUsers = await fetchServiceTechnicians()
+
+    technicians.value = serviceUsers.map((user: ApiUserBrief) => ({
+      id: String(user.id),
+      apiId: user.id,
+      name: user.name,
+      role: 'Technik Serwisowy',
+      avatar: '👨‍🔧',
+      activeReports: 0,
+      email: user.email,
+      department: 'Techniczny',
+      status: 'active'
+    }))
+  } catch (error) {
+    console.error('Error fetching technicians:', error)
+    technicians.value = []
+  } finally {
+    techniciansLoading.value = false
   }
-])
+}
 
 export function useTechnicians() {
-  const getTechnicianByName = (name: string): Technician | undefined => {
-    return technicians.value.find(t => t.name === name)
-  }
-  
-  const getTechnicianById = (id: string): Technician | undefined => {
-    return technicians.value.find(t => t.id === id)
-  }
-  
+  const getTechnicianByName = (name: string): Technician | undefined =>
+    technicians.value.find((t) => t.name === name)
+
+  const getTechnicianById = (id: string): Technician | undefined =>
+    technicians.value.find((t) => t.id === id)
+
+  const getTechnicianByApiId = (apiId: number): Technician | undefined =>
+    technicians.value.find((t) => t.apiId === apiId)
+
   const incrementActiveReports = (techId: string) => {
-    const tech = technicians.value.find(t => t.id === techId)
-    if (tech) {
-      tech.activeReports++
-    }
+    const tech = technicians.value.find((t) => t.id === techId)
+    if (tech) tech.activeReports++
   }
-  
+
   const decrementActiveReports = (techId: string) => {
-    const tech = technicians.value.find(t => t.id === techId)
-    if (tech && tech.activeReports > 0) {
-      tech.activeReports--
-    }
+    const tech = technicians.value.find((t) => t.id === techId)
+    if (tech && tech.activeReports > 0) tech.activeReports--
   }
-  
-  const activeTechnicians = computed(() => 
-    technicians.value.filter(t => t.status === 'active')
+
+  const syncActiveReportsFromAssignments = (assignments: Map<number, number>) => {
+    technicians.value.forEach((tech) => {
+      tech.activeReports = assignments.get(tech.apiId) ?? 0
+    })
+  }
+
+  const activeTechnicians = computed(() =>
+    technicians.value.filter((t) => t.status === 'active')
   )
-  
+
   return {
     technicians,
+    techniciansLoading,
     activeTechnicians,
+    fetchTechnicians,
     getTechnicianByName,
     getTechnicianById,
+    getTechnicianByApiId,
     incrementActiveReports,
-    decrementActiveReports
+    decrementActiveReports,
+    syncActiveReportsFromAssignments
   }
 }

@@ -1,12 +1,29 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, ref, computed } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useTechnicians, technicians } from '@/composables/useTechnicians'
+import api from '@/utils/api'
+import {
+  type ApiFault,
+  type ApiUserBrief,
+  assignTechnicianToDevice,
+  fetchDeviceTechnicianMap,
+  getAssignedTechnicianFromMap,
+  mapApiStatusToUi,
+  unassignTechnicianFromDevice,
+  unwrapList,
+  updateFaultStatus
+} from '@/utils/faults'
 
-// Use shared technicians composable
-const { incrementActiveReports } = useTechnicians()
+const {
+  fetchTechnicians,
+  techniciansLoading,
+  syncActiveReportsFromAssignments
+} = useTechnicians()
 
 interface Report {
   id: string
+  faultId: number
+  deviceUuid: string
   title: string
   device: string
   deviceType: string
@@ -18,102 +35,106 @@ interface Report {
   reportedBy: string
   reportedAt: string
   assignedTo: string
+  assignedUserId: number | null
   estimatedTime: string
   createdAt: string
   updatedAt: string
 }
 
-const reports = ref<Report[]>([
-  {
-    id: 'R-001',
-    title: 'Klimatyzacja nie chłodzi',
-    device: 'Klimatyzacja A-101',
-    deviceType: 'Klimatyzacja',
-    location: 'Budynek A, piętro 1',
-    status: 'new',
-    priority: 'high',
-    category: 'Awaria',
-    description: 'Urządzenie przestało chłodzić, temperatura w pomieszczeniu wzrosła do 28°C',
-    reportedBy: 'Jan Kowalski',
-    reportedAt: '2024-03-02 14:30',
-    assignedTo: '',
-    estimatedTime: '2 godziny',
-    createdAt: '2024-03-02 14:30',
-    updatedAt: '2024-03-02 14:30'
-  },
-  {
-    id: 'R-002',
-    title: 'Hałas z wentylacji',
-    device: 'Wentylacja C-301',
-    deviceType: 'Wentylacja',
-    location: 'Budynek C, piętro 3',
-    status: 'in_progress',
-    priority: 'medium',
-    category: 'Konserwacja',
-    description: 'Nienaturalny hałas podczas pracy wentylacji, prawdopodobnie zużyty łożysko',
-    reportedBy: 'Anna Nowak',
-    reportedAt: '2024-03-02 13:15',
-    assignedTo: 'Piotr Wiśniewski',
-    estimatedTime: '4 godziny',
-    createdAt: '2024-03-02 13:15',
-    updatedAt: '2024-03-02 15:45'
-  },
-  {
-    id: 'R-003',
-    title: 'Przegląd okresowy ogrzewania',
-    device: 'Ogrzewanie B-205',
-    deviceType: 'Ogrzewanie',
-    location: 'Budynek B, piętro 2',
-    status: 'resolved',
-    priority: 'low',
-    category: 'Przegląd',
-    description: 'Planowy przegląd okresowy systemu ogrzewania przed sezonem letnim',
-    reportedBy: 'System',
-    reportedAt: '2024-03-02 11:45',
-    assignedTo: 'Marek Kowalczyk',
-    estimatedTime: '1 godzina',
-    createdAt: '2024-03-02 11:45',
-    updatedAt: '2024-03-02 16:20'
-  },
-  {
-    id: 'R-004',
-    title: 'Wyciek wody z klimatyzacji',
-    device: 'Klimatyzacja D-102',
-    deviceType: 'Klimatyzacja',
-    location: 'Budynek D, piętro 1',
-    status: 'new',
-    priority: 'high',
-    category: 'Awaria',
-    description: 'Aktywne wyciekanie wody z jednostki wewnętrznej, zagrożenie dla sprzętu elektronicznego',
-    reportedBy: 'Ewa Dąbrowska',
-    reportedAt: '2024-03-02 16:00',
-    assignedTo: '',
-    estimatedTime: '3 godziny',
-    createdAt: '2024-03-02 16:00',
-    updatedAt: '2024-03-02 16:00'
-  },
-  {
-    id: 'R-005',
-    title: 'Niska wydajność ogrzewania',
-    device: 'Ogrzewanie E-201',
-    deviceType: 'Ogrzewanie',
-    location: 'Budynek E, piętro 2',
-    status: 'in_progress',
-    priority: 'medium',
-    category: 'Wydajność',
-    description: 'System grzeje słabiej niż zwykle, temperatura docelowa nie jest osiągana',
-    reportedBy: 'Tomasz Zieliński',
-    reportedAt: '2024-03-02 10:30',
-    assignedTo: 'Krzysztof Jankowski',
-    estimatedTime: '2 godziny',
-    createdAt: '2024-03-02 10:30',
-    updatedAt: '2024-03-02 14:15'
+const reports = ref<Report[]>([])
+const reportsLoading = ref(false)
+const apiError = ref('')
+
+const extractApiError = (error: unknown): string => {
+  const err = error as {
+    response?: { status?: number; data?: { message?: string } }
+    message?: string
   }
-])
+  const status = err.response?.status
+  const message = err.response?.data?.message
+
+  if (status === 401) {
+    return 'Sesja wygasła — zaloguj się ponownie.'
+  }
+  if (status === 502 || status === 503) {
+    return 'Serwer API jest niedostępny (Render może się budzić). Odśwież za chwilę.'
+  }
+  return message || err.message || 'Nie udało się połączyć z API.'
+}
+
+const mapApiFaultToReport = (
+  fault: ApiFault,
+  deviceTechnicianMap: Map<string, ApiUserBrief>
+): Report => {
+  const assigned = getAssignedTechnicianFromMap(fault.device_uuid, deviceTechnicianMap)
+  const uiStatus = mapApiStatusToUi(fault.status)
+  const priority = fault.resolved_at ? 'low' : 'high'
+
+  return {
+    id: `F-${fault.id.toString().padStart(3, '0')}`,
+    faultId: fault.id,
+    deviceUuid: fault.device_uuid,
+    title: fault.title || `Zgłoszenie #${fault.id}`,
+    device: fault.device?.name || fault.device_uuid,
+    deviceType: fault.device?.type || 'Nieznane',
+    location: fault.device?.location || 'Nieznana',
+    status: uiStatus,
+    priority,
+    category: fault.status === 'pending' ? 'Awaria' : 'Serwis',
+    description: fault.description || '-',
+    reportedBy: fault.reported_by,
+    reportedAt: fault.created_at ? fault.created_at.replace('T', ' ').substring(0, 16) : '-',
+    assignedTo: assigned?.name ?? '',
+    assignedUserId: assigned?.id ?? null,
+    estimatedTime: fault.resolved_at ? 'Rozwiązane' : '24h',
+    createdAt: fault.created_at || '-',
+    updatedAt: fault.updated_at ? fault.updated_at.replace('T', ' ').substring(0, 16) : '-'
+  }
+}
+
+const syncTechnicianWorkload = (reportList: Report[]) => {
+  const counts = new Map<number, number>()
+  reportList.forEach((report) => {
+    if (report.assignedUserId && report.status !== 'resolved') {
+      counts.set(report.assignedUserId, (counts.get(report.assignedUserId) ?? 0) + 1)
+    }
+  })
+  syncActiveReportsFromAssignments(counts)
+}
+
+const fetchReports = async () => {
+  reportsLoading.value = true
+  apiError.value = ''
+
+  try {
+    const response = await api.get('/faults')
+    const faults = unwrapList<ApiFault>(response.data)
+
+    let deviceTechnicianMap = new Map<string, ApiUserBrief>()
+    try {
+      deviceTechnicianMap = await fetchDeviceTechnicianMap()
+    } catch (mapError: unknown) {
+      console.warn('Nie udało się pobrać przypisań techników:', mapError)
+    }
+
+    const mappedReports = faults.map((fault) => mapApiFaultToReport(fault, deviceTechnicianMap))
+
+    reports.value = mappedReports
+    filteredReports.value = mappedReports
+    syncTechnicianWorkload(mappedReports)
+    applyFilters()
+  } catch (error: unknown) {
+    apiError.value = extractApiError(error)
+    console.error('Error fetching faults:', error)
+  } finally {
+    reportsLoading.value = false
+  }
+}
 
 const getStatusText = (status: string) => {
   const statusMap = {
     new: 'Nowe',
+    pending: 'Nowe',
     in_progress: 'W realizacji',
     resolved: 'Rozwiązane'
   }
@@ -194,21 +215,20 @@ const applyFilters = () => {
     return matchesSearch && matchesStatus && matchesPriority && matchesCategory
   })
 
-  // Apply sorting
+  const normalizeSortValue = (val: unknown): string | number => {
+    if (val == null) return ''
+    if (typeof val === 'number') return val
+    return String(val).toLowerCase()
+  }
+
   filtered.sort((a, b) => {
-    let aVal = a[sortField.value as keyof typeof a]
-    let bVal = b[sortField.value as keyof typeof b]
-    
-    if (typeof aVal === 'string') {
-      aVal = aVal.toLowerCase()
-      bVal = (bVal as string).toLowerCase()
-    }
-    
+    const aVal = normalizeSortValue(a[sortField.value as keyof Report])
+    const bVal = normalizeSortValue(b[sortField.value as keyof Report])
+
     if (sortOrder.value === 'asc') {
       return aVal > bVal ? 1 : -1
-    } else {
-      return aVal < bVal ? 1 : -1
     }
+    return aVal < bVal ? 1 : -1
   })
 
   filteredReports.value = filtered
@@ -248,6 +268,7 @@ const stats = ref({
 const selectedReport = ref<Report | null>(null)
 const showDetails = ref(false)
 const showNewReport = ref(false)
+const showEditReport = ref(false)
 
 // Form for new report
 const newReportForm = ref({
@@ -259,7 +280,19 @@ const newReportForm = ref({
   category: 'Awaria',
   description: '',
   reportedBy: 'Aktualny użytkownik',
+  contact: '',
+  isAnonymous: false,
+  images: [] as string[],
   estimatedTime: '1 godzina'
+})
+
+const showAssignModal = ref(false)
+const assignSaving = ref(false)
+const assignTechnicianId = ref<number | null>(null)
+
+const editReportForm = ref({
+  status: 'pending',
+  technicianId: null as number | null
 })
 
 const devices = [
@@ -303,26 +336,106 @@ const onDragLeave = () => {
   dragOverTechnician.value = null
 }
 
-const onDrop = (technicianId: string, technicianName: string) => {
-  if (draggedReport.value) {
-    const dragged = draggedReport.value
-    // Update the report assignment
-    const reportIndex = reports.value.findIndex(r => r.id === dragged.id)
-    if (reportIndex !== -1) {
-      const report = reports.value[reportIndex]
-      if (report) {
-        report.assignedTo = technicianName
-        report.status = 'in_progress'
-        report.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-      }
-      
-      // Update technician active reports count using shared composable
-      incrementActiveReports(technicianId)
-      
-      applyFilters()
-    }
+const uiStatusToApi: Record<string, 'pending' | 'in_progress' | 'resolved'> = {
+  new: 'pending',
+  in_progress: 'in_progress',
+  resolved: 'resolved'
+}
+
+const removeTechnicianAssignment = async (report: Report) => {
+  if (!report.assignedUserId) return
+  await unassignTechnicianFromDevice(report.deviceUuid, report.assignedUserId)
+  if (report.status === 'in_progress') {
+    await updateFaultStatus(report.faultId, 'pending')
+  }
+}
+
+const assignReportToTechnician = async (
+  report: Report,
+  technicianId: number,
+  options: { refresh?: boolean } = { refresh: true }
+) => {
+  if (report.assignedUserId && report.assignedUserId !== technicianId) {
+    await unassignTechnicianFromDevice(report.deviceUuid, report.assignedUserId)
+  }
+
+  await assignTechnicianToDevice(report.deviceUuid, technicianId)
+
+  if (report.status === 'new') {
+    await updateFaultStatus(report.faultId, 'in_progress')
+  }
+
+  if (options.refresh) {
+    await fetchReports()
+  }
+}
+
+const onDrop = async (technicianApiId: number) => {
+  if (!draggedReport.value) return
+
+  assignSaving.value = true
+  try {
+    await assignReportToTechnician(draggedReport.value, technicianApiId)
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    alert(
+      'Błąd przypisania technika: ' + (err.response?.data?.message || err.message || 'Nieznany błąd')
+    )
+  } finally {
+    assignSaving.value = false
     draggedReport.value = null
     dragOverTechnician.value = null
+  }
+}
+
+const openAssignModal = (report: Report) => {
+  selectedReport.value = report
+  assignTechnicianId.value = report.assignedUserId ?? null
+  showAssignModal.value = true
+}
+
+const closeAssignModal = () => {
+  showAssignModal.value = false
+  assignTechnicianId.value = null
+  if (!showDetails.value && !showEditReport.value) {
+    selectedReport.value = null
+  }
+}
+
+const saveAssignment = async () => {
+  if (!selectedReport.value || assignTechnicianId.value === null) {
+    alert('Wybierz technika')
+    return
+  }
+
+  assignSaving.value = true
+  try {
+    await assignReportToTechnician(selectedReport.value, Number(assignTechnicianId.value))
+    closeAssignModal()
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    alert(
+      'Błąd przypisania technika: ' + (err.response?.data?.message || err.message || 'Nieznany błąd')
+    )
+  } finally {
+    assignSaving.value = false
+  }
+}
+
+const unassignReport = async (report: Report) => {
+  if (!report.assignedUserId) return
+  if (!confirm(`Odpiąć zgłoszenie ${report.id} od technika ${report.assignedTo}?`)) return
+
+  assignSaving.value = true
+  try {
+    await removeTechnicianAssignment(report)
+    await fetchReports()
+    closeAssignModal()
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    alert('Błąd: ' + (err.response?.data?.message || err.message || 'Nieznany błąd'))
+  } finally {
+    assignSaving.value = false
   }
 }
 
@@ -350,6 +463,9 @@ const showNewReportModal = () => {
     category: 'Awaria',
     description: '',
     reportedBy: 'Aktualny użytkownik',
+    contact: '',
+    isAnonymous: false,
+    images: [],
     estimatedTime: '1 godzina'
   }
   showNewReport.value = true
@@ -361,6 +477,16 @@ const closeNewReportModal = () => {
 
 const onKeyDown = (e: KeyboardEvent) => {
   if (e.key !== 'Escape') return
+
+  if (showAssignModal.value) {
+    closeAssignModal()
+    return
+  }
+
+  if (showEditReport.value) {
+    closeEditReportModal()
+    return
+  }
 
   if (showNewReport.value) {
     closeNewReportModal()
@@ -374,70 +500,135 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  fetchTechnicians()
+  fetchReports()
 })
 
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeyDown)
 })
 
-const createNewReport = () => {
-  const newId = `R-${String(reports.value.length + 1).padStart(3, '0')}`
-  const now = new Date().toISOString().slice(0, 16).replace('T', ' ')
-  
-  const newReport = {
-    id: newId,
-    title: newReportForm.value.title,
-    device: newReportForm.value.device,
-    deviceType: newReportForm.value.deviceType,
-    location: newReportForm.value.location,
-    status: 'new',
-    priority: newReportForm.value.priority,
-    category: newReportForm.value.category,
-    description: newReportForm.value.description,
-    reportedBy: newReportForm.value.reportedBy,
-    reportedAt: now,
-    assignedTo: '',
-    estimatedTime: newReportForm.value.estimatedTime,
-    createdAt: now,
-    updatedAt: now
+const createNewReport = async () => {
+  try {
+    // Find device UUID from device name
+    const deviceName = newReportForm.value.device
+    const deviceResponse = await api.get('/devices')
+    const devices = Array.isArray(deviceResponse.data) ? deviceResponse.data : deviceResponse.data.data || []
+    const selectedDevice = devices.find((d: any) => d.name === deviceName || d.uuid === deviceName)
+    
+    if (!selectedDevice) {
+      alert('Nie znaleziono urządzenia: ' + deviceName)
+      return
+    }
+    
+    const faultData = {
+      title: newReportForm.value.title,
+      description: newReportForm.value.description,
+      reported_by: newReportForm.value.isAnonymous ? 'Anonimowy' : (newReportForm.value.reportedBy || 'Administrator'),
+      contact: newReportForm.value.isAnonymous ? null : (newReportForm.value.contact || newReportForm.value.reportedBy || 'admin@example.com')
+    }
+    
+    console.log('Creating fault for device:', selectedDevice.uuid, faultData)
+    const response = await api.post(`/devices/${selectedDevice.uuid}/faults`, faultData)
+    console.log('Fault created:', response.data)
+    
+    // Refresh reports list
+    await fetchReports()
+    
+    closeNewReportModal()
+  } catch (error: any) {
+    console.error('Error creating report:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas tworzenia zgłoszenia: ' + (error.response?.data?.message || error.message))
   }
-  
-  reports.value.unshift(newReport)
-  applyFilters()
-  
-  // Update stats
-  stats.value = {
-    total: reports.value.length,
-    new: reports.value.filter(r => r.status === 'new').length,
-    inProgress: reports.value.filter(r => r.status === 'in_progress').length,
-    resolved: reports.value.filter(r => r.status === 'resolved').length,
-    highPriority: reports.value.filter(r => r.priority === 'high').length
-  }
-  
-  closeNewReportModal()
 }
 
-const updateReportStatus = (reportId: string, newStatus: string) => {
-  const report = reports.value.find(r => r.id === reportId)
-  if (report) {
-    report.status = newStatus
-    report.updatedAt = new Date().toISOString().slice(0, 16).replace('T', ' ')
-    applyFilters()
-    
-    // Update stats
-    stats.value = {
-      total: reports.value.length,
-      new: reports.value.filter(r => r.status === 'new').length,
-      inProgress: reports.value.filter(r => r.status === 'in_progress').length,
-      resolved: reports.value.filter(r => r.status === 'resolved').length,
-      highPriority: reports.value.filter(r => r.priority === 'high').length
+const updateReportStatus = async (reportId: string, newStatus: string) => {
+  try {
+    const numericId = Number(reportId.replace('F-', ''))
+    const apiStatus = uiStatusToApi[newStatus] ?? 'pending'
+    await updateFaultStatus(numericId, apiStatus)
+    await fetchReports()
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    alert('Błąd podczas aktualizacji statusu: ' + (err.response?.data?.message || err.message))
+  }
+}
+
+const handleImageUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+  if (!files) return
+
+  Array.from(files).forEach(file => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result as string
+      if (result) {
+        newReportForm.value.images.push(result)
+      }
     }
+    reader.readAsDataURL(file)
+  })
+}
+
+const removeImage = (index: number) => {
+  newReportForm.value.images.splice(index, 1)
+}
+
+const showEditReportModal = (report: Report) => {
+  selectedReport.value = report
+  editReportForm.value = {
+    status: uiStatusToApi[report.status] ?? 'pending',
+    technicianId: report.assignedUserId ?? null
+  }
+  showEditReport.value = true
+}
+
+const closeEditReportModal = () => {
+  showEditReport.value = false
+  selectedReport.value = null
+}
+
+const saveEditReport = async () => {
+  if (!selectedReport.value) return
+
+  assignSaving.value = true
+  try {
+    const report = selectedReport.value
+    const newTechnicianId = editReportForm.value.technicianId
+
+    if (newTechnicianId && newTechnicianId !== report.assignedUserId) {
+      await assignReportToTechnician(report, newTechnicianId, { refresh: false })
+    } else if (!newTechnicianId && report.assignedUserId) {
+      await removeTechnicianAssignment(report)
+    }
+
+    await updateFaultStatus(
+      report.faultId,
+      editReportForm.value.status as 'pending' | 'in_progress' | 'resolved'
+    )
+    await fetchReports()
+    closeEditReportModal()
+  } catch (error: unknown) {
+    const err = error as { response?: { data?: { message?: string } }; message?: string }
+    alert('Błąd podczas edycji zgłoszenia: ' + (err.response?.data?.message || err.message))
+  } finally {
+    assignSaving.value = false
   }
 }
 </script>
 
 <template>
   <div class="flex flex-col gap-8">
+    <!-- API error banner -->
+    <div
+      v-if="apiError"
+      class="bg-red-50 px-4 py-3 border border-red-200 rounded-lg text-red-800 text-sm"
+    >
+      {{ apiError }}
+    </div>
+
     <!-- Header with stats -->
     <section>
       <h1 class="mb-6 font-bold text-slate-800 text-3xl">Panel zgłoszeń</h1>
@@ -677,6 +868,17 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
                 </div>
               </th>
               <th 
+                @click="sortReports('assignedTo')" 
+                class="hover:bg-gray-100 px-6 py-4 font-semibold text-gray-600 text-sm text-left transition-colors cursor-pointer"
+              >
+                <div class="flex items-center gap-1">
+                  Technik
+                  <span v-if="sortField === 'assignedTo'" class="text-blue-500">
+                    {{ sortOrder === 'asc' ? '↑' : '↓' }}
+                  </span>
+                </div>
+              </th>
+              <th 
                 @click="sortReports('reportedBy')" 
                 class="hover:bg-gray-100 px-6 py-4 font-semibold text-gray-600 text-sm text-left transition-colors cursor-pointer"
               >
@@ -753,6 +955,10 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
                   {{ getPriorityText(report.priority) }}
                 </span>
               </td>
+              <td class="px-6 py-4 text-sm">
+                <span v-if="report.assignedTo" class="font-medium text-slate-800">{{ report.assignedTo }}</span>
+                <span v-else class="text-gray-400">—</span>
+              </td>
               <td class="px-6 py-4 text-sm">{{ report.reportedBy }}</td>
               <td class="px-6 py-4 text-sm">{{ report.reportedAt }}</td>
               <td class="px-6 py-4">
@@ -765,12 +971,12 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
                     👁️
                   </button>
                   <button 
-                    v-if="report.status === 'new'"
-                    @click="updateReportStatus(report.id, 'in_progress')"
-                    class="hover:bg-gray-100 p-2 rounded transition-colors"
-                    title="Przypisz"
+                    v-if="report.status !== 'resolved'"
+                    @click="openAssignModal(report)"
+                    class="hover:bg-purple-100 p-2 rounded text-purple-600 transition-colors"
+                    title="Przypisz technika"
                   >
-                    📝
+                    👨‍🔧
                   </button>
                   <button 
                     v-if="report.status === 'in_progress'"
@@ -779,6 +985,13 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
                     title="Rozwiąż"
                   >
                     ✅
+                  </button>
+                  <button 
+                    @click="showEditReportModal(report)"
+                    class="hover:bg-blue-100 p-2 rounded text-blue-600 transition-colors"
+                    title="Edytuj"
+                  >
+                    ✏️
                   </button>
                 </div>
               </td>
@@ -891,13 +1104,20 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
           </div>
           
           <!-- Actions -->
-          <div class="flex gap-3 pt-4 border-t">
+          <div class="flex flex-wrap gap-3 pt-4 border-t">
             <button 
-              v-if="selectedReport.status === 'new'"
-              @click="updateReportStatus(selectedReport.id, 'in_progress')"
-              class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
+              v-if="selectedReport.status !== 'resolved'"
+              @click="openAssignModal(selectedReport)"
+              class="bg-purple-500 hover:bg-purple-600 px-4 py-2 rounded-lg text-white transition-colors"
             >
-              Przypisz i rozpocznij
+              Przypisz technika
+            </button>
+            <button 
+              v-if="selectedReport.assignedUserId"
+              @click="unassignReport(selectedReport)"
+              class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+            >
+              Odepnij technika
             </button>
             <button 
               v-if="selectedReport.status === 'in_progress'"
@@ -906,7 +1126,10 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
             >
               Oznacz jako rozwiązane
             </button>
-            <button class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors">
+            <button 
+              @click="showEditReportModal(selectedReport)"
+              class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+            >
               Edytuj zgłoszenie
             </button>
             <button class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors">
@@ -1010,7 +1233,40 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
             ></textarea>
           </div>
           
-          <div class="gap-4 grid grid-cols-1 md:grid-cols-2">
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Zdjęcia (opcjonalne)</label>
+            <div class="p-4 border-2 border-gray-300 border-dashed rounded-lg">
+              <input 
+                type="file" 
+                accept="image/*" 
+                multiple
+                @change="handleImageUpload"
+                class="w-full"
+              >
+              <p class="mt-2 text-gray-500 text-sm">Możesz dodać kilka zdjęć dokumentujących problem</p>
+              <div v-if="newReportForm.images.length > 0" class="flex flex-wrap gap-2 mt-3">
+                <div v-for="(img, idx) in newReportForm.images" :key="idx" class="relative">
+                  <img :src="img" class="rounded w-20 h-20 object-cover">
+                  <button 
+                    @click="removeImage(idx)"
+                    class="-top-2 -right-2 absolute bg-red-500 rounded-full w-5 h-5 text-white text-xs"
+                  >✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="flex items-center gap-2">
+            <input 
+              type="checkbox" 
+              id="isAnonymous"
+              v-model="newReportForm.isAnonymous"
+              class="rounded focus:ring-blue-500 w-4 h-4 text-blue-600"
+            >
+            <label for="isAnonymous" class="font-medium text-gray-700 text-sm">Zgłoś anonimowo</label>
+          </div>
+          
+          <div class="gap-4 grid grid-cols-1 md:grid-cols-2" v-if="!newReportForm.isAnonymous">
             <div>
               <label class="block mb-1 font-medium text-gray-700 text-sm">Zgłaszający</label>
               <input 
@@ -1020,6 +1276,18 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
               >
             </div>
             
+            <div>
+              <label class="block mb-1 font-medium text-gray-700 text-sm">Kontakt (email/telefon)</label>
+              <input 
+                v-model="newReportForm.contact" 
+                type="text" 
+                class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+                placeholder="email@example.com lub +48 123 456 789"
+              >
+            </div>
+          </div>
+          
+          <div v-if="!newReportForm.isAnonymous">
             <div>
               <label class="block mb-1 font-medium text-gray-700 text-sm">Szacowany czas</label>
               <input 
@@ -1050,6 +1318,128 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
       </div>
     </div>
 
+    <!-- Edit Report Modal -->
+    <div v-if="showEditReport" class="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50" @click="closeEditReportModal">
+      <div class="bg-white mx-4 p-6 rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto" @click.stop>
+        <div class="flex justify-between items-start mb-6">
+          <h2 class="font-bold text-slate-800 text-xl">Edytuj zgłoszenie</h2>
+          <button @click="closeEditReportModal" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+        </div>
+        
+        <form @submit.prevent="saveEditReport" class="space-y-4">
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Technik</label>
+            <select 
+              v-model="editReportForm.technicianId"
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              :disabled="techniciansLoading || technicians.length === 0"
+            >
+              <option :value="null">— Nieprzypisany —</option>
+              <option v-for="tech in technicians" :key="tech.id" :value="tech.apiId">
+                {{ tech.name }}
+              </option>
+            </select>
+            <p v-if="technicians.length === 0" class="mt-1 text-amber-600 text-xs">
+              Brak techników serwisowych w systemie (użytkownicy z rolą is_service)
+            </p>
+          </div>
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Status *</label>
+            <select 
+              v-model="editReportForm.status" 
+              required
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+            >
+              <option value="pending">Nowe</option>
+              <option value="in_progress">W realizacji</option>
+              <option value="resolved">Rozwiązane</option>
+            </select>
+          </div>
+          
+          <div class="bg-gray-50 p-3 rounded-lg text-gray-600 text-sm">
+            <p><strong>Tytuł:</strong> {{ selectedReport?.title }}</p>
+            <p class="mt-1"><strong>Opis:</strong> {{ selectedReport?.description }}</p>
+          </div>
+          
+          <div class="flex gap-3 pt-4 border-t">
+            <button 
+              type="submit" 
+              :disabled="assignSaving"
+              class="bg-blue-500 hover:bg-blue-600 disabled:bg-gray-400 px-6 py-2 rounded-lg text-white transition-colors"
+            >
+              {{ assignSaving ? 'Zapisywanie...' : 'Zapisz zmiany' }}
+            </button>
+            <button 
+              type="button" 
+              @click="closeEditReportModal"
+              class="hover:bg-gray-50 px-6 py-2 border border-gray-300 rounded-lg transition-colors"
+            >
+              Anuluj
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Assign Technician Modal -->
+    <div v-if="showAssignModal && selectedReport" class="z-50 fixed inset-0 flex justify-center items-center bg-black bg-opacity-50" @click="closeAssignModal">
+      <div class="bg-white mx-4 p-6 rounded-xl w-full max-w-md" @click.stop>
+        <div class="flex justify-between items-start mb-6">
+          <div>
+            <h2 class="font-bold text-slate-800 text-xl">Przypisz technika</h2>
+            <p class="mt-1 text-gray-500 text-sm">{{ selectedReport.id }} — {{ selectedReport.title }}</p>
+          </div>
+          <button @click="closeAssignModal" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
+        </div>
+
+        <div class="space-y-4">
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Technik serwisowy *</label>
+            <select
+              v-model="assignTechnicianId"
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-purple-500 w-full"
+              :disabled="techniciansLoading || technicians.length === 0"
+            >
+              <option :value="null">Wybierz technika</option>
+              <option v-for="tech in technicians" :key="tech.id" :value="tech.apiId">
+                {{ tech.name }}
+              </option>
+            </select>
+          </div>
+
+          <p class="text-gray-500 text-xs">
+            Technik zostanie powiązany z urządzeniem tego zgłoszenia. Status zmieni się na „W realizacji”.
+          </p>
+
+          <div class="flex flex-wrap gap-3 pt-2">
+            <button
+              @click="saveAssignment"
+              :disabled="assignSaving || assignTechnicianId === null"
+              class="flex-1 bg-purple-500 hover:bg-purple-600 disabled:bg-gray-400 px-4 py-2 rounded-lg text-white transition-colors"
+            >
+              {{ assignSaving ? 'Przypisywanie...' : 'Przypisz' }}
+            </button>
+            <button
+              v-if="selectedReport.assignedUserId"
+              type="button"
+              @click="unassignReport(selectedReport)"
+              :disabled="assignSaving"
+              class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+            >
+              Odepnij
+            </button>
+            <button
+              type="button"
+              @click="closeAssignModal"
+              class="hover:bg-gray-50 px-4 py-2 border border-gray-300 rounded-lg transition-colors"
+            >
+              Anuluj
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Assignment View with Drag & Drop -->
     <div v-if="showAssignmentView" class="right-0 z-40 fixed inset-y-0 bg-white shadow-2xl w-full max-w-md overflow-hidden">
       <div class="flex flex-col h-full">
@@ -1063,13 +1453,19 @@ const updateReportStatus = (reportId: string, newStatus: string) => {
         
         <div class="flex-1 p-6 overflow-y-auto">
           <!-- Technicians List -->
-          <div class="space-y-4">
+          <div v-if="techniciansLoading" class="py-8 text-gray-500 text-center">
+            Ładowanie techników...
+          </div>
+          <div v-else-if="technicians.length === 0" class="py-8 text-gray-500 text-center">
+            Brak techników serwisowych w systemie
+          </div>
+          <div v-else class="space-y-4">
             <div
               v-for="tech in technicians"
               :key="tech.id"
               @dragover.prevent="onDragOver(tech.id)"
               @dragleave="onDragLeave"
-              @drop.prevent="onDrop(tech.id, tech.name)"
+              @drop.prevent="onDrop(tech.apiId)"
               class="p-4 border-2 rounded-xl transition-all"
               :class="{
                 'border-purple-500 bg-purple-50 ring-2 ring-purple-200': dragOverTechnician === tech.id,

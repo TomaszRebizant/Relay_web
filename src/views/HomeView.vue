@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import {
   Chart as ChartJS,
   CategoryScale,
@@ -14,6 +14,7 @@ import {
   Filler
 } from 'chart.js'
 import { Line, Bar, Doughnut } from 'vue-chartjs'
+import api from '@/utils/api'
 
 // Register Chart.js components
 ChartJS.register(
@@ -29,106 +30,84 @@ ChartJS.register(
   Filler
 )
 
+const loading = ref(true)
+
 const stats = ref([
   {
     title: 'Urządzenia',
-    value: '1,234',
-    change: '+12%',
-    changeType: 'positive',
+    value: '0',
+    change: '+0%',
+    changeType: 'positive' as 'positive' | 'negative',
     icon: '🔧',
     color: 'bg-blue-500'
   },
   {
     title: 'Nowe zgłoszenia',
-    value: '89',
-    change: '+5%',
-    changeType: 'positive',
+    value: '0',
+    change: '+0%',
+    changeType: 'positive' as 'positive' | 'negative',
     icon: '📝',
     color: 'bg-red-500'
   },
   {
     title: 'W realizacji',
-    value: '45',
-    change: '-3%',
-    changeType: 'negative',
+    value: '0',
+    change: '+0%',
+    changeType: 'positive' as 'positive' | 'negative',
     icon: '⚡',
     color: 'bg-amber-500'
   },
   {
     title: 'Rozwiązane',
-    value: '567',
-    change: '+18%',
-    changeType: 'positive',
+    value: '0',
+    change: '+0%',
+    changeType: 'positive' as 'positive' | 'negative',
     icon: '✅',
     color: 'bg-green-500'
   }
 ])
 
-const recentReports = ref([
-  {
-    id: 'R-001',
-    device: 'Klimatyzacja A-101',
-    location: 'Budynek A, piętro 1',
-    status: 'nowe',
-    priority: 'wysoki',
-    reportedBy: 'Jan Kowalski',
-    reportedAt: '2024-03-02 14:30'
-  },
-  {
-    id: 'R-002',
-    device: 'Ogrzewanie B-205',
-    location: 'Budynek B, piętro 2',
-    status: 'w realizacji',
-    priority: 'średni',
-    reportedBy: 'Anna Nowak',
-    reportedAt: '2024-03-02 13:15'
-  },
-  {
-    id: 'R-003',
-    device: 'Wentylacja C-301',
-    location: 'Budynek C, piętro 3',
-    status: 'rozwiązane',
-    priority: 'niski',
-    reportedBy: 'Piotr Wiśniewski',
-    reportedAt: '2024-03-02 11:45'
-  }
-])
+const recentReports = ref<any[]>([])
 
-const deviceCategories = ref([
-  {
-    name: 'Klimatyzacja',
-    count: 456,
-    working: 412,
-    maintenance: 38,
-    broken: 6,
-    icon: '❄️',
-    color: 'bg-blue-500'
-  },
-  {
-    name: 'Ogrzewanie',
-    count: 378,
-    working: 351,
-    maintenance: 22,
-    broken: 5,
-    icon: '🔥',
-    color: 'bg-red-500'
-  },
-  {
-    name: 'Wentylacja',
-    count: 289,
-    working: 267,
-    maintenance: 18,
-    broken: 4,
-    icon: '💨',
-    color: 'bg-green-500'
+const deviceCategories = ref<any[]>([])
+
+const unwrapList = <T>(data: unknown): T[] => {
+  if (Array.isArray(data)) return data
+  if (data && typeof data === 'object' && 'data' in data) {
+    const inner = (data as { data: unknown }).data
+    return Array.isArray(inner) ? inner : []
   }
-])
+  return []
+}
+
+const mapApiStatusToUi = (status: string): string => {
+  const statusMap: Record<string, string> = {
+    pending: 'new',
+    in_progress: 'in_progress',
+    resolved: 'resolved',
+    closed: 'resolved'
+  }
+  return statusMap[status] || status
+}
+
+const getStatusLabel = (status: string): string => {
+  const labels: Record<string, string> = {
+    new: 'Nowe',
+    pending: 'Nowe',
+    in_progress: 'W realizacji',
+    resolved: 'Rozwiązane'
+  }
+  return labels[status] || status
+}
 
 const getStatusColor = (status: string) => {
   const colors = {
-    nowe: 'bg-red-500',
+    new: 'bg-red-500',
     'w realizacji': 'bg-amber-500',
-    rozwiązane: 'bg-green-500'
+    rozwiązane: 'bg-green-500',
+    Nowe: 'bg-red-500',
+    'W realizacji': 'bg-amber-500',
+    Rozwiązane: 'bg-green-500'
   }
   return colors[status as keyof typeof colors] || 'bg-gray-500'
 }
@@ -136,19 +115,131 @@ const getStatusColor = (status: string) => {
 const getPriorityColor = (priority: string) => {
   const colors = {
     wysoki: 'bg-red-500',
+    high: 'bg-red-500',
     średni: 'bg-amber-500',
-    niski: 'bg-green-500'
+    medium: 'bg-amber-500',
+    niski: 'bg-green-500',
+    low: 'bg-green-500'
   }
   return colors[priority as keyof typeof colors] || 'bg-gray-500'
 }
 
+const fetchDashboardData = async () => {
+  try {
+    loading.value = true
+
+    // Fetch devices
+    const devicesRes = await api.get('/devices')
+    const devices = unwrapList<any>(devicesRes.data)
+    
+    // Fetch faults
+    const faultsRes = await api.get('/faults')
+    const faults = unwrapList<any>(faultsRes.data)
+
+    // Update stats
+    const newFaults = faults.filter((f: any) => mapApiStatusToUi(f.status) === 'new').length
+    const inProgressFaults = faults.filter((f: any) => mapApiStatusToUi(f.status) === 'in_progress').length
+    const resolvedFaults = faults.filter((f: any) => mapApiStatusToUi(f.status) === 'resolved').length
+
+    if (stats.value[0]) stats.value[0].value = devices.length.toString()
+    if (stats.value[1]) stats.value[1].value = newFaults.toString()
+    if (stats.value[2]) stats.value[2].value = inProgressFaults.toString()
+    if (stats.value[3]) stats.value[3].value = resolvedFaults.toString()
+
+    // Update recent reports (last 5)
+    recentReports.value = faults.slice(0, 5).map((f: any) => ({
+      id: `F-${f.id.toString().padStart(3, '0')}`,
+      device: f.device?.name || f.device_uuid,
+      location: f.device?.location || 'Nieznana',
+      status: getStatusLabel(mapApiStatusToUi(f.status)),
+      priority: f.resolved_at ? 'niski' : 'wysoki',
+      reportedBy: f.reported_by,
+      reportedAt: f.created_at ? f.created_at.replace('T', ' ').substring(0, 16) : '-'
+    }))
+
+    // Update device categories by type (only count, no status breakdown)
+    const typeMap = new Map<string, number>()
+    
+    devices.forEach((d: any) => {
+      const type = d.type || 'Inne'
+      typeMap.set(type, (typeMap.get(type) || 0) + 1)
+    })
+
+    const iconMap: Record<string, string> = {
+      'Klimatyzacja': '❄️',
+      'Ogrzewanie': '🔥',
+      'Wentylacja': '💨',
+      'Inne': '🔧'
+    }
+
+    const colorMap: Record<string, string> = {
+      'Klimatyzacja': 'bg-blue-500',
+      'Ogrzewanie': 'bg-red-500',
+      'Wentylacja': 'bg-green-500',
+      'Inne': 'bg-gray-500'
+    }
+
+    deviceCategories.value = Array.from(typeMap.entries()).map(([name, count]) => ({
+      name,
+      count,
+      icon: iconMap[name] || '🔧',
+      color: colorMap[name] || 'bg-gray-500'
+    }))
+
+    // Update failure trends chart - group faults by month
+    const monthMap = new Map<string, { faults: number; maintenance: number }>()
+    const now = new Date()
+    
+    // Initialize last 6 months
+    for (let i = 5; i >= 0; i--) {
+      const date = new Date(now.getFullYear(), now.getMonth() - i, 1)
+      const key = date.toLocaleString('pl-PL', { month: 'long', year: 'numeric' })
+      monthMap.set(key, { faults: 0, maintenance: 0 })
+    }
+
+    // Group faults by month
+    faults.forEach((f: any) => {
+      if (f.created_at) {
+        const date = new Date(f.created_at)
+        const key = date.toLocaleString('pl-PL', { month: 'long', year: 'numeric' })
+        if (monthMap.has(key)) {
+          const data = monthMap.get(key)!
+          if (f.status === 'pending' || f.status === 'new') {
+            data.faults++
+          } else {
+            data.maintenance++
+          }
+        }
+      }
+    })
+
+    // Update chart data
+    failureTrendsData.value.labels = Array.from(monthMap.keys())
+    if (failureTrendsData.value.datasets[0]) {
+      failureTrendsData.value.datasets[0].data = Array.from(monthMap.values()).map(v => v.faults)
+    }
+    if (failureTrendsData.value.datasets[1]) {
+      failureTrendsData.value.datasets[1].data = Array.from(monthMap.values()).map(v => v.maintenance)
+    }
+
+  } catch (error) {
+    console.error('Error fetching dashboard data:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+onMounted(() => {
+  fetchDashboardData()
+})
+
 // Chart data for Failure Trends (last 6 months)
-const failureTrendsData = computed(() => ({
-  labels: ['Sierpień', 'Wrzesień', 'Październik', 'Listopad', 'Grudzień', 'Styczeń'],
+const failureTrendsData = ref({
+  labels: [] as string[],
   datasets: [
     {
       label: 'Awarię',
-      data: [12, 19, 15, 25, 22, 30],
+      data: [] as number[],
       borderColor: '#ef4444',
       backgroundColor: 'rgba(239, 68, 68, 0.1)',
       fill: true,
@@ -161,7 +252,7 @@ const failureTrendsData = computed(() => ({
     },
     {
       label: 'Konserwacje',
-      data: [8, 15, 12, 18, 20, 24],
+      data: [] as number[],
       borderColor: '#f59e0b',
       backgroundColor: 'rgba(245, 158, 11, 0.1)',
       fill: true,
@@ -173,7 +264,7 @@ const failureTrendsData = computed(() => ({
       pointHoverRadius: 6
     }
   ]
-}))
+})
 
 const failureTrendsOptions = {
   responsive: true,
@@ -265,48 +356,6 @@ const repairTimeOptions = {
     }
   }
 }
-
-// Chart data for Maintenance Costs
-const maintenanceCostsData = computed(() => ({
-  labels: ['Części', 'Praca serwisowa', 'Transport', 'Diagnostyka', 'Inne'],
-  datasets: [{
-    data: [35, 40, 10, 10, 5],
-    backgroundColor: [
-      '#3b82f6',
-      '#22c55e',
-      '#f59e0b',
-      '#8b5cf6',
-      '#6b7280'
-    ],
-    borderWidth: 0,
-    hoverOffset: 4
-  }]
-}))
-
-const maintenanceCostsOptions = {
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: {
-      position: 'right' as const,
-      labels: {
-        usePointStyle: true,
-        pointStyle: 'circle',
-        padding: 15,
-        font: { size: 12 }
-      }
-    },
-    tooltip: {
-      backgroundColor: 'rgba(0, 0, 0, 0.8)',
-      padding: 12,
-      cornerRadius: 8,
-      callbacks: {
-        label: (context: any) => `${context.label}: ${context.raw}%`
-      }
-    }
-  },
-  cutout: '60%'
-}
 </script>
 
 <template>
@@ -359,21 +408,6 @@ const maintenanceCostsOptions = {
           </div>
           <div class="h-72">
             <Line :data="failureTrendsData" :options="failureTrendsOptions" />
-          </div>
-        </div>
-
-        <!-- Maintenance Costs Chart -->
-        <div class="bg-white shadow-sm p-6 rounded-xl">
-          <div class="mb-4">
-            <h3 class="font-semibold text-slate-800 text-lg">Struktura kosztów</h3>
-            <p class="text-gray-500 text-sm">Rozkład kosztów konserwacji</p>
-          </div>
-          <div class="h-56">
-            <Doughnut :data="maintenanceCostsData" :options="maintenanceCostsOptions" />
-          </div>
-          <div class="mt-4 pt-4 border-t text-center">
-            <div class="text-gray-500 text-sm">Całkowite koszty (miesiąc)</div>
-            <div class="font-bold text-slate-800 text-2xl">45 230 PLN</div>
           </div>
         </div>
 
@@ -464,57 +498,10 @@ const maintenanceCostsOptions = {
           :key="category.name"
           class="p-6 border border-gray-200 hover:border-blue-300 rounded-lg transition-colors"
         >
-          <div class="flex items-center gap-4 mb-6">
+          <div class="flex items-center gap-4">
             <div class="text-2xl">{{ category.icon }}</div>
             <h3 class="flex-1 font-semibold text-slate-800 text-lg">{{ category.name }}</h3>
             <div class="font-bold text-blue-500 text-2xl">{{ category.count }}</div>
-          </div>
-          
-          <div class="space-y-4">
-            <div class="flex items-center gap-4">
-              <div class="flex-1">
-                <div class="bg-gray-100 rounded-full h-2 overflow-hidden">
-                  <div 
-                    class="bg-green-500 rounded-full h-full transition-all duration-300"
-                    :style="{ width: (category.working / category.count * 100) + '%' }"
-                  ></div>
-                </div>
-              </div>
-              <div class="min-w-20">
-                <div class="font-semibold text-slate-800 text-sm">{{ category.working }}</div>
-                <div class="text-gray-500 text-xs">Działające</div>
-              </div>
-            </div>
-            
-            <div class="flex items-center gap-4">
-              <div class="flex-1">
-                <div class="bg-gray-100 rounded-full h-2 overflow-hidden">
-                  <div 
-                    class="bg-amber-500 rounded-full h-full transition-all duration-300"
-                    :style="{ width: (category.maintenance / category.count * 100) + '%' }"
-                  ></div>
-                </div>
-              </div>
-              <div class="min-w-20">
-                <div class="font-semibold text-slate-800 text-sm">{{ category.maintenance }}</div>
-                <div class="text-gray-500 text-xs">Konserwacja</div>
-              </div>
-            </div>
-            
-            <div class="flex items-center gap-4">
-              <div class="flex-1">
-                <div class="bg-gray-100 rounded-full h-2 overflow-hidden">
-                  <div 
-                    class="bg-red-500 rounded-full h-full transition-all duration-300"
-                    :style="{ width: (category.broken / category.count * 100) + '%' }"
-                  ></div>
-                </div>
-              </div>
-              <div class="min-w-20">
-                <div class="font-semibold text-slate-800 text-sm">{{ category.broken }}</div>
-                <div class="text-gray-500 text-xs">Uszkodzone</div>
-              </div>
-            </div>
           </div>
         </div>
       </div>

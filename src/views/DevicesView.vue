@@ -4,6 +4,41 @@ import QRCode from 'qrcode'
 import { jsPDF } from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { Blockchain, Block, createServiceRecord } from '@/utils/blockchain'
+import api from '@/utils/api'
+
+// API Device type (from backend)
+interface ApiDevice {
+  uuid: string
+  name: string
+  type: string
+  location: string
+  status: string
+  serial_number: string | null
+  manufacturer: string | null
+  model: string | null
+  brand: string | null
+  installation_date: string | null
+  notes: string | null
+  created_at: string
+  updated_at: string
+}
+
+// API Device Event type (service history from backend)
+interface ApiDeviceEvent {
+  id: number
+  device_uuid: string
+  event_type: string
+  description: string | null
+  performed_by: string | null
+  performed_at: string
+  created_at: string
+  updated_at: string
+  user?: {
+    id: number
+    name: string
+    email: string
+  }
+}
 
 // Type definitions
 interface Device {
@@ -55,240 +90,67 @@ interface EditForm {
   department: string
 }
 
-const devices = ref<Device[]>([
-  {
-    id: 'DEV-001',
-    name: 'Klimatyzacja A-101',
-    type: 'Klimatyzacja',
-    location: 'Budynek A, piętro 1',
-    status: 'working',
-    lastMaintenance: '2024-02-15',
-    nextMaintenance: '2024-05-15',
-    temperature: '22°C',
-    humidity: '45%',
-    energyUsage: '2.5 kW',
-    icon: '❄️',
-    statusColor: 'bg-green-500',
-    serialNumber: 'AC-2023-001',
-    manufacturer: 'Samsung',
-    model: 'AR12TXEAAWKNEU',
-    installationDate: '2023-01-15',
-    warrantyExpiry: '2026-01-15',
-    description: 'System klimatyzacji split typu ściennego o mocy chłodniczej 3.5 kW',
-    notes: 'Regularnie czyszczony filtr, sprawdzony czynnik chłodniczy',
-    responsiblePerson: 'Jan Kowalski',
-    department: 'IT',
-    latitude: 52.2297,
-    longitude: 21.0122,
-    blockchain: (() => {
-      const bc = new Blockchain()
-      bc.addBlock({
-        timestamp: '2023-01-15T10:00:00.000Z',
-        action: 'installation',
-        description: 'Instalacja systemu klimatyzacji split, montaż jednostki wewnętrznej i zewnętrznej, podłączenie rur miedzianych i okablowania',
-        technician: 'Marek Kowalczyk',
-        deviceId: 'DEV-001',
-        cost: 2500
-      })
-      bc.addBlock({
-        timestamp: '2023-07-15T14:30:00.000Z',
-        action: 'maintenance',
-        description: 'Przegląd okresowy - czyszczenie filtrów, sprawdzenie ciśnienia czynnika chłodniczego, dezynfekcja parownika',
-        technician: 'Piotr Wiśniewski',
-        deviceId: 'DEV-001',
-        cost: 350,
-        parts: ['filtr powietrza', 'środek dezynfekujący']
-      })
-      bc.addBlock({
-        timestamp: '2024-02-15T09:00:00.000Z',
-        action: 'maintenance',
-        description: 'Coroczny przegląd - wymiana filtra, kontrola szczelności układu, pomiar wydajności chłodniczej',
-        technician: 'Krzysztof Jankowski',
-        deviceId: 'DEV-001',
-        cost: 420,
-        parts: ['filtr kieszeniowy', 'czynnik R410A']
-      })
-      return bc
-    })()
-  },
-  {
-    id: 'DEV-002',
-    name: 'Ogrzewanie B-205',
-    type: 'Ogrzewanie',
-    location: 'Budynek B, piętro 2',
-    status: 'maintenance',
-    lastMaintenance: '2024-01-20',
-    nextMaintenance: '2024-03-20',
-    temperature: '21°C',
-    humidity: '42%',
-    energyUsage: '3.2 kW',
-    icon: '🔥',
-    statusColor: 'bg-amber-500',
-    serialNumber: 'HT-2022-002',
-    manufacturer: 'Viessmann',
-    model: 'Vitodens 100W',
-    installationDate: '2022-06-10',
-    warrantyExpiry: '2027-06-10',
-    description: 'Kocioł gazowy kondensacyjny o mocy 18 kW',
-    notes: 'Planowana wymiana pompy obiegowej',
-    responsiblePerson: 'Anna Nowak',
-    department: 'Administracja',
-    latitude: 52.2305,
-    longitude: 21.0135,
-    blockchain: (() => {
-      const bc = new Blockchain()
-      bc.addBlock({
-        timestamp: '2022-06-10T08:00:00.000Z',
-        action: 'installation',
-        description: 'Instalacja kotła gazowego kondensacyjnego, montaż na ścianie, podłączenie do systemu CO i CWU, konfiguracja sterownika',
-        technician: 'Tomasz Lewandowski',
-        deviceId: 'DEV-002',
-        cost: 8500,
-        parts: ['kocioł Vitodens 100W', 'zestaw kominowy', 'armatura']
-      })
-      bc.addBlock({
-        timestamp: '2024-01-20T11:00:00.000Z',
-        action: 'repair',
-        description: 'Wymiana pompy obiegowej - stara pompa wykazywała znaczne zużycie, nowa pompa z modulacją obrotów',
-        technician: 'Marek Kowalczyk',
-        deviceId: 'DEV-002',
-        cost: 1200,
-        parts: ['pompa obiegowa Grundfos', 'uszczelki', 'ciecz chłodnicza']
-      })
-      return bc
-    })()
-  },
-  {
-    id: 'DEV-003',
-    name: 'Wentylacja C-301',
-    type: 'Wentylacja',
-    location: 'Budynek C, piętro 3',
-    status: 'working',
-    lastMaintenance: '2024-02-01',
-    nextMaintenance: '2024-05-01',
-    temperature: '20°C',
-    humidity: '40%',
-    energyUsage: '1.8 kW',
-    icon: '💨',
-    statusColor: 'bg-green-500',
-    serialNumber: 'VT-2023-003',
-    manufacturer: 'Systemair',
-    model: 'Topaz PX',
-    installationDate: '2023-03-20',
-    warrantyExpiry: '2028-03-20',
-    description: 'Centralna wentylacja mechaniczna z odzyskiem ciepła',
-    notes: 'Sprawdzony wymiennik ciepła, wymieniony filtr kieszeniowy',
-    responsiblePerson: 'Piotr Wiśniewski',
-    department: 'Techniczny',
-    latitude: 52.2285,
-    longitude: 21.0115
-  },
-  {
-    id: 'DEV-004',
-    name: 'Klimatyzacja D-102',
-    type: 'Klimatyzacja',
-    location: 'Budynek D, piętro 1',
-    status: 'broken',
-    lastMaintenance: '2023-12-10',
-    nextMaintenance: '2024-03-10',
-    temperature: '--',
-    humidity: '--',
-    energyUsage: '0 kW',
-    icon: '❄️',
-    statusColor: 'bg-red-500',
-    serialNumber: 'AC-2022-004',
-    manufacturer: 'LG',
-    model: 'LAU12HV',
-    installationDate: '2022-08-15',
-    warrantyExpiry: '2025-08-15',
-    description: 'Klimatyzacja przenośna o mocy chłodniczej 3.5 kW',
-    notes: 'Awaria sprężarki, czeka na naprawę gwarancyjną',
-    responsiblePerson: 'Katarzyna Dąbrowska',
-    department: 'Marketing',
-    latitude: 52.2310,
-    longitude: 21.0140,
-    blockchain: (() => {
-      const bc = new Blockchain()
-      bc.addBlock({
-        timestamp: '2022-08-15T09:30:00.000Z',
-        action: 'installation',
-        description: 'Instalacja klimatyzacji przenośnej, podłączenie do gniazda 230V, montaż rury wylotowej, konfiguracja pilotem',
-        technician: 'Piotr Wiśniewski',
-        deviceId: 'DEV-004',
-        cost: 1800
-      })
-      bc.addBlock({
-        timestamp: '2023-06-20T13:00:00.000Z',
-        action: 'maintenance',
-        description: 'Przegląd okresowy - czyszczenie filtrów, wymiana baterii w pilocie, kontrola poziomu czynnika',
-        technician: 'Krzysztof Jankowski',
-        deviceId: 'DEV-004',
-        cost: 280,
-        parts: ['baterie AAA', 'filtr powietrza']
-      })
-      bc.addBlock({
-        timestamp: '2024-01-10T10:15:00.000Z',
-        action: 'warranty_claim',
-        description: 'Awaria sprężarki - urządzenie nie chłodzi, głośna praca, błąd na wyświetlaczu E1. Zgłoszenie reklamacji gwarancyjnej.',
-        technician: 'Marek Kowalczyk',
-        deviceId: 'DEV-004',
-        cost: 0,
-        parts: ['sprężarka (gwarancja)']
-      })
-      return bc
-    })()
-  },
-  {
-    id: 'DEV-005',
-    name: 'Ogrzewanie E-201',
-    type: 'Ogrzewanie',
-    location: 'Budynek E, piętro 2',
-    status: 'working',
-    lastMaintenance: '2024-02-10',
-    nextMaintenance: '2024-05-10',
-    temperature: '23°C',
-    humidity: '38%',
-    energyUsage: '2.9 kW',
-    icon: '🔥',
-    statusColor: 'bg-green-500',
-    serialNumber: 'HT-2023-005',
-    manufacturer: 'Buderus',
-    model: 'Logamax Plus',
-    installationDate: '2023-09-05',
-    warrantyExpiry: '2028-09-05',
-    description: 'Kocioł gazowy kondensacyjny o mocy 24 kW',
-    notes: 'Nowa instalacja, sprawdzony ciśnienie robocze',
-    responsiblePerson: 'Tomasz Lewandowski',
-    department: 'Techniczny',
-    latitude: 52.2275,
-    longitude: 21.0105
-  },
-  {
-    id: 'DEV-006',
-    name: 'Wentylacja F-303',
-    type: 'Wentylacja',
-    location: 'Budynek F, piętro 3',
-    status: 'working',
-    lastMaintenance: '2024-01-25',
-    nextMaintenance: '2024-04-25',
-    temperature: '19°C',
-    humidity: '41%',
-    energyUsage: '1.5 kW',
-    icon: '💨',
-    statusColor: 'bg-green-500',
-    serialNumber: 'VT-2022-006',
-    manufacturer: 'Vent-Axia',
-    model: 'Sentinel Kinetic',
-    installationDate: '2022-11-12',
-    warrantyExpiry: '2027-11-12',
-    description: 'Wentylacja z rekuperacją, sterowanie WiFi',
-    notes: 'Zaktualizowane oprogramowanie, sprawdzony czujnik CO2',
-    responsiblePerson: 'Magdalena Zielińska',
-    department: 'HR',
-    latitude: 52.2320,
-    longitude: 21.0150
+const devices = ref<Device[]>([])
+
+// Map API device to UI device format
+const mapApiDeviceToUiDevice = (apiDevice: ApiDevice): Device => {
+  const statusMap: Record<string, string> = {
+    'active': 'working',
+    'inactive': 'broken',
+    'maintenance': 'maintenance'
   }
-])
+  const iconMap: Record<string, string> = {
+    'klimatyzacja': '❄️',
+    'ogrzewanie': '🔥',
+    'wentylacja': '💨',
+    'a/c': '❄️',
+    'gate': '🚪',
+    'wheel lock': '🔒',
+    'bramka': '🚪',
+    'blokada': '🔒'
+  }
+  return {
+    id: apiDevice.uuid,
+    name: apiDevice.name,
+    type: apiDevice.type || 'Inne',
+    location: apiDevice.location || 'Nieznana',
+    status: statusMap[apiDevice.status] || apiDevice.status,
+    lastMaintenance: apiDevice.updated_at ? apiDevice.updated_at.substring(0, 10) : '-',
+    nextMaintenance: '-',
+    temperature: '-',
+    humidity: '-',
+    energyUsage: '-',
+    icon: iconMap[(apiDevice.type || '').toLowerCase()] || '🔧',
+    statusColor: statusMap[apiDevice.status] === 'working' ? 'bg-green-500' :
+                 statusMap[apiDevice.status] === 'maintenance' ? 'bg-amber-500' : 'bg-red-500',
+    serialNumber: apiDevice.serial_number || '-',
+    manufacturer: apiDevice.brand || '-',
+    model: apiDevice.model || '-',
+    installationDate: apiDevice.installation_date ? apiDevice.installation_date.substring(0, 10) : '-',
+    warrantyExpiry: '-',
+    description: apiDevice.notes || '-',
+    notes: apiDevice.notes || '',
+    responsiblePerson: '-',
+    department: '-',
+  }
+}
+
+// Fetch devices from API
+const fetchDevices = async () => {
+  try {
+    console.log('Fetching devices from API...')
+    const response = await api.get('/devices')
+    console.log('Devices API response:', response.data)
+    const data = Array.isArray(response.data) ? response.data : response.data.data || []
+    const mappedDevices = data.map((device: ApiDevice) => mapApiDeviceToUiDevice(device))
+    devices.value = mappedDevices
+    filteredDevices.value = mappedDevices
+  } catch (error: any) {
+    console.error('Error fetching devices:', error)
+    console.error('Error response:', error.response?.data)
+    console.error('Error status:', error.response?.status)
+  }
+}
 
 // Modal states
 const showDetailsModal = ref(false)
@@ -308,7 +170,11 @@ const deviceDistance = ref<number>(0)
 const qrCodeDataUrl = ref('')
 const scannedDevice = ref<Device | null>(null)
 const selectedDevice = ref<Device | null>(null)
+
+const currentOrigin = computed(() => window.location.origin)
 const blockchainVerificationResult = ref<{ valid: boolean; tamperedBlocks: number[] } | null>(null)
+const apiServiceHistory = ref<ApiDeviceEvent[]>([])
+const serviceHistoryLoading = ref(false)
 
 // Service record form
 const serviceRecordForm = ref({
@@ -513,6 +379,7 @@ const onKeyDown = (e: KeyboardEvent) => {
 
 onMounted(() => {
   window.addEventListener('keydown', onKeyDown)
+  fetchDevices()
 })
 
 onUnmounted(() => {
@@ -560,50 +427,70 @@ const addDevice = () => {
   closeAddModal()
 }
 
-const saveDevice = () => {
+const saveDevice = async () => {
   if (selectedDevice.value) {
-    const deviceIndex = devices.value.findIndex(d => d.id === selectedDevice.value!.id)
-    if (deviceIndex !== -1) {
-      const updatedDevice: Device = {
-        id: selectedDevice.value!.id,
+    try {
+      // Map UI status to API status
+      const apiStatusMap: Record<string, string> = {
+        'working': 'active',
+        'broken': 'inactive',
+        'maintenance': 'maintenance'
+      }
+      
+      const updateData = {
         name: editForm.value.name,
         type: editForm.value.type,
         location: editForm.value.location,
-        status: editForm.value.status,
-        lastMaintenance: editForm.value.lastMaintenance,
-        nextMaintenance: editForm.value.nextMaintenance,
-        temperature: editForm.value.temperature,
-        humidity: editForm.value.humidity,
-        energyUsage: editForm.value.energyUsage,
-        serialNumber: editForm.value.serialNumber,
+        status: apiStatusMap[editForm.value.status] || editForm.value.status,
+        serial_number: editForm.value.serialNumber,
         manufacturer: editForm.value.manufacturer,
         model: editForm.value.model,
-        installationDate: editForm.value.installationDate,
-        warrantyExpiry: editForm.value.warrantyExpiry,
-        description: editForm.value.description,
-        notes: editForm.value.notes,
-        responsiblePerson: editForm.value.responsiblePerson,
-        department: editForm.value.department,
-        icon: selectedDevice.value!.icon,
-        statusColor: editForm.value.status === 'working' ? 'bg-green-500' : 
-                    editForm.value.status === 'maintenance' ? 'bg-amber-500' : 'bg-red-500'
+        installation_date: editForm.value.installationDate || null,
+        notes: editForm.value.description
       }
-      devices.value[deviceIndex] = updatedDevice
-      applyFilters()
+      
+      console.log('Updating device:', selectedDevice.value.id, updateData)
+      const response = await api.put(`/devices/${selectedDevice.value.id}`, updateData)
+      console.log('Device updated:', response.data)
+      
+      // Refresh devices list
+      await fetchDevices()
+      
+      closeEditModal()
+    } catch (error: any) {
+      console.error('Error updating device:', error)
+      console.error('Error response:', error.response?.data)
+      alert('Błąd podczas zapisywania urządzenia: ' + (error.response?.data?.message || error.message))
     }
   }
-  closeEditModal()
+}
+
+const deleteDevice = async (deviceId: string) => {
+  if (!confirm('Czy na pewno chcesz usunąć to urządzenie?')) {
+    return
+  }
+  
+  try {
+    console.log('Deleting device:', deviceId)
+    await api.delete(`/devices/${deviceId}`)
+    console.log('Device deleted')
+    
+    // Refresh devices list
+    await fetchDevices()
+  } catch (error: any) {
+    console.error('Error deleting device:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas usuwania urządzenia: ' + (error.response?.data?.message || error.message))
+  }
 }
 
 // QR Code functions
 const generateQRCode = async (device: Device) => {
   try {
-    const qrData = JSON.stringify({
-      id: device.id,
-      name: device.name,
-      type: device.type,
-      location: device.location
-    })
+    // Generate URL to anonymous report form with device ID
+    const baseUrl = window.location.origin
+    const qrData = `${baseUrl}/report?device=${device.id}`
+    
     qrCodeDataUrl.value = await QRCode.toDataURL(qrData, {
       width: 256,
       margin: 2,
@@ -617,6 +504,45 @@ const generateQRCode = async (device: Device) => {
   } catch (err) {
     console.error('QR Code generation failed:', err)
   }
+}
+
+const printQRCode = () => {
+  if (!qrCodeDataUrl.value || !selectedDevice.value) return
+  
+  const printWindow = window.open('', '_blank')
+  if (!printWindow) return
+  
+  printWindow.document.write(`
+    <html>
+      <head>
+        <title>Kod QR - ${selectedDevice.value.name}</title>
+        <style>
+          body { font-family: Arial, sans-serif; text-align: center; padding: 20px; }
+          .device-info { margin-bottom: 20px; }
+          .qr-code { margin: 20px auto; }
+          .instructions { margin-top: 30px; font-size: 12px; color: #666; }
+        </style>
+      </head>
+      <body>
+        <div class="device-info">
+          <h1>${selectedDevice.value.name}</h1>
+          <p>ID: ${selectedDevice.value.id}</p>
+          <p>Lokalizacja: ${selectedDevice.value.location}</p>
+          <p>Typ: ${selectedDevice.value.type}</p>
+        </div>
+        <div class="qr-code">
+          <img src="${qrCodeDataUrl.value}" alt="QR Code" width="200" height="200">
+        </div>
+        <div class="instructions">
+          <h3>Instrukcja techniczna:</h3>
+          <p>Zeskanuj ten kod QR, aby zgłosić awarię lub sprawdzić status urządzenia.</p>
+          <p>W razie problemów skontaktuj się z działem technicznym.</p>
+        </div>
+      </body>
+    </html>
+  `)
+  printWindow.document.close()
+  printWindow.print()
 }
 
 const closeQRModal = () => {
@@ -647,7 +573,9 @@ const quickReportForm = ref({
   title: '',
   description: '',
   priority: 'medium',
-  category: 'Awaria'
+  category: 'Awaria',
+  contact: '',
+  images: [] as string[]
 })
 
 const closeQuickReportModal = () => {
@@ -657,16 +585,58 @@ const closeQuickReportModal = () => {
     title: '',
     description: '',
     priority: 'medium',
-    category: 'Awaria'
+    category: 'Awaria',
+    contact: '',
+    images: []
   }
 }
 
-const submitQuickReport = () => {
-  if (scannedDevice.value && quickReportForm.value.title) {
-    // In a real app, this would send data to backend
+const submitQuickReport = async () => {
+  if (!scannedDevice.value || !quickReportForm.value.title) {
+    alert('Wypełnij tytuł zgłoszenia')
+    return
+  }
+
+  try {
+    const faultData = {
+      title: quickReportForm.value.title,
+      description: quickReportForm.value.description,
+      reported_by: 'Anonimowy',
+      contact: quickReportForm.value.contact || null
+    }
+
+    console.log('Creating anonymous fault for device:', scannedDevice.value.id, faultData)
+    const response = await api.post(`/devices/${scannedDevice.value.id}/faults`, faultData)
+    console.log('Fault created:', response.data)
+
     alert(`Zgłoszenie "${quickReportForm.value.title}" dla urządzenia ${scannedDevice.value.name} zostało utworzone!`)
     closeQuickReportModal()
+  } catch (error: any) {
+    console.error('Error creating quick report:', error)
+    console.error('Error response:', error.response?.data)
+    alert('Błąd podczas tworzenia zgłoszenia: ' + (error.response?.data?.message || error.message))
   }
+}
+
+const handleQuickReportImageUpload = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  const files = target.files
+  if (!files) return
+
+  Array.from(files).forEach(file => {
+    const reader = new FileReader()
+    reader.onload = (e) => {
+      const result = e.target?.result as string
+      if (result) {
+        quickReportForm.value.images.push(result)
+      }
+    }
+    reader.readAsDataURL(file)
+  })
+}
+
+const removeQuickReportImage = (index: number) => {
+  quickReportForm.value.images.splice(index, 1)
 }
 
 // Export functions
@@ -820,15 +790,38 @@ const goToNearestDevice = () => {
 }
 
 // Blockchain functions
+const fetchServiceHistory = async (deviceUuid: string) => {
+  try {
+    serviceHistoryLoading.value = true
+    console.log('Fetching service history for device:', deviceUuid)
+    const response = await api.get(`/devices/${deviceUuid}/events`)
+    console.log('Service history response:', response.data)
+    
+    const data = Array.isArray(response.data) ? response.data : response.data.data || []
+    apiServiceHistory.value = data
+  } catch (error: any) {
+    console.error('Error fetching service history:', error)
+    console.error('Error response:', error.response?.data)
+    apiServiceHistory.value = []
+  } finally {
+    serviceHistoryLoading.value = false
+  }
+}
+
 const showBlockchainHistory = (device: Device) => {
   selectedDevice.value = device
   blockchainVerificationResult.value = null
+  apiServiceHistory.value = []
   showBlockchainModal.value = true
+  
+  // Fetch API service history
+  fetchServiceHistory(device.id)
 }
 
 const closeBlockchainModal = () => {
   showBlockchainModal.value = false
   blockchainVerificationResult.value = null
+  apiServiceHistory.value = []
 }
 
 const openAddServiceRecordModal = () => {
@@ -1132,6 +1125,13 @@ const stats = ref({
               class="flex-1 hover:bg-gray-50 px-3 py-2 border border-gray-300 rounded-lg text-sm transition-colors"
             >
               Edytuj
+            </button>
+            <button 
+              @click="deleteDevice(device.id)"
+              class="hover:bg-red-50 px-3 py-2 border border-red-300 rounded-lg text-red-600 text-sm transition-colors"
+              title="Usuń urządzenie"
+            >
+              🗑️
             </button>
             <button 
               @click="generateQRCode(device)"
@@ -1694,14 +1694,19 @@ const stats = ref({
             <img v-if="qrCodeDataUrl" :src="qrCodeDataUrl" alt="QR Code" class="w-64 h-64">
           </div>
           
-          <p class="mt-4 text-gray-600 text-sm">Zeskanuj kod, aby szybko zgłosić awarię</p>
+          <div class="bg-gray-50 mt-4 p-3 rounded-lg">
+            <p class="mb-1 text-gray-600 text-xs">Link do formularza zgłoszeniowego:</p>
+            <code class="text-blue-600 text-sm break-all">{{ currentOrigin }}/report?device={{ selectedDevice.id }}</code>
+          </div>
+          
+          <p class="mt-4 text-gray-600 text-sm">Zeskanuj kod, aby zgłosić awarię (anonimowo)</p>
           
           <div class="flex gap-3 mt-6">
             <button 
-              @click="closeQRModal"
+              @click="printQRCode"
               class="flex-1 bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
             >
-              Drukuj
+              🖨️ Drukuj
             </button>
             <button 
               @click="closeQRModal"
@@ -1742,10 +1747,15 @@ const stats = ref({
       <div class="bg-white shadow-xl mx-4 rounded-xl w-full max-w-lg max-h-[90vh] overflow-y-auto">
         <div class="p-6 border-gray-200 border-b">
           <div class="flex justify-between items-center">
-            <h2 class="font-semibold text-slate-800 text-xl">Szybkie zgłoszenie awarii</h2>
+            <div>
+              <h2 class="font-semibold text-slate-800 text-xl">Szybkie zgłoszenie awarii</h2>
+              <p class="mt-1 text-gray-500 text-sm">Urządzenie: <strong>{{ scannedDevice.name }}</strong></p>
+            </div>
             <button @click="closeQuickReportModal" class="text-gray-400 hover:text-gray-600 text-2xl">✕</button>
           </div>
-          <p class="mt-1 text-gray-500 text-sm">Urządzenie: <strong>{{ scannedDevice.name }}</strong></p>
+          <div class="bg-blue-50 mt-3 px-3 py-2 rounded-lg">
+            <p class="text-blue-700 text-sm">🔒 To zgłoszenie jest <strong>anonimowe</strong>. Twoje dane nie będą udostępnione.</p>
+          </div>
         </div>
         
         <div class="space-y-4 p-6">
@@ -1768,6 +1778,40 @@ const stats = ref({
               class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
               placeholder="Opisz szczegółowo problem..."
             ></textarea>
+          </div>
+          
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Zdjęcia (opcjonalne)</label>
+            <div class="p-4 border-2 border-gray-300 border-dashed rounded-lg">
+              <input 
+                type="file" 
+                accept="image/*" 
+                multiple
+                @change="handleQuickReportImageUpload"
+                class="w-full"
+              >
+              <p class="mt-2 text-gray-500 text-sm">Możesz dodać kilka zdjęć dokumentujących problem</p>
+              <div v-if="quickReportForm.images.length > 0" class="flex flex-wrap gap-2 mt-3">
+                <div v-for="(img, idx) in quickReportForm.images" :key="idx" class="relative">
+                  <img :src="img" class="rounded w-20 h-20 object-cover">
+                  <button 
+                    @click="removeQuickReportImage(idx)"
+                    class="-top-2 -right-2 absolute bg-red-500 rounded-full w-5 h-5 text-white text-xs"
+                  >✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div>
+            <label class="block mb-1 font-medium text-gray-700 text-sm">Kontakt opcjonalny (email/telefon)</label>
+            <input 
+              v-model="quickReportForm.contact" 
+              type="text" 
+              class="px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 w-full"
+              placeholder="email@example.com lub +48 123 456 789"
+            >
+            <p class="mt-1 text-gray-500 text-xs">Podaj kontakt tylko jeśli chcesz otrzymać informację o rozwiązaniu problemu</p>
           </div>
           
           <div class="gap-4 grid grid-cols-2">
@@ -1937,24 +1981,60 @@ const stats = ref({
         </div>
         
         <div class="p-6 max-h-[60vh] overflow-y-auto">
-          <div v-if="!selectedDevice.blockchain || selectedDevice.blockchain.getServiceHistory().length === 0" class="py-8 text-center">
-            <div class="mb-3 text-5xl">📋</div>
-            <h3 class="mb-2 font-semibold text-slate-800 text-lg">Brak historii serwisowej</h3>
-            <p class="mb-4 text-gray-500">To urządzenie nie ma jeszcze wpisów w blockchain</p>
-            <button 
-              @click="openAddServiceRecordModal"
-              class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
-            >
-              Dodaj pierwszy wpis
-            </button>
+          <!-- API Service History -->
+          <div class="mb-6">
+            <h3 class="mb-3 font-semibold text-slate-700 text-lg">📋 Historia serwisowa (API)</h3>
+            
+            <div v-if="serviceHistoryLoading" class="py-4 text-center">
+              <div class="mb-2 text-3xl">⏳</div>
+              <p class="text-gray-500">Ładowanie historii...</p>
+            </div>
+            
+            <div v-else-if="apiServiceHistory.length === 0" class="py-4 text-gray-500 text-center">
+              <p>Brak historii serwisowej w systemie</p>
+            </div>
+            
+            <div v-else class="space-y-3">
+              <div 
+                v-for="event in apiServiceHistory" 
+                :key="event.id"
+                class="bg-blue-50 p-4 border border-blue-200 rounded-lg"
+              >
+                <div class="flex justify-between items-start mb-2">
+                  <span class="bg-blue-500 px-3 py-1 rounded-full font-medium text-white text-xs">
+                    {{ event.event_type }}
+                  </span>
+                  <span class="text-gray-500 text-sm">{{ new Date(event.performed_at || event.created_at).toLocaleString('pl-PL') }}</span>
+                </div>
+                <p v-if="event.description" class="mb-2 text-gray-700">{{ event.description }}</p>
+                <div class="text-gray-500 text-sm">
+                  <span class="font-medium">Wykonał:</span> {{ event.user?.name || event.performed_by || 'Nieznany' }}
+                </div>
+              </div>
+            </div>
           </div>
           
-          <div v-else class="space-y-4">
-            <div 
-              v-for="block in selectedDevice.blockchain.getServiceHistory()" 
-              :key="block.index"
-              class="p-4 border border-gray-200 rounded-lg"
-            >
+          <!-- Blockchain History -->
+          <div class="pt-4 border-t">
+            <h3 class="mb-3 font-semibold text-slate-700 text-lg">⛓️ Historia lokalna (Blockchain)</h3>
+            
+            <div v-if="!selectedDevice.blockchain || selectedDevice.blockchain.getServiceHistory().length === 0" class="py-4 text-center">
+              <div class="mb-3 text-5xl">📋</div>
+              <p class="mb-4 text-gray-500">To urządzenie nie ma jeszcze wpisów w blockchain</p>
+              <button 
+                @click="openAddServiceRecordModal"
+                class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded-lg text-white transition-colors"
+              >
+                Dodaj pierwszy wpis
+              </button>
+            </div>
+            
+            <div v-else class="space-y-4">
+              <div 
+                v-for="block in selectedDevice.blockchain.getServiceHistory()" 
+                :key="block.index"
+                class="p-4 border border-gray-200 rounded-lg"
+              >
               <div class="flex justify-between items-start mb-3">
                 <div class="flex items-center gap-3">
                   <span :class="getActionColor(block.data.action)" class="px-3 py-1 rounded-full font-medium text-white text-xs">
@@ -1990,6 +2070,7 @@ const stats = ref({
               </div>
             </div>
           </div>
+        </div>
         </div>
         
         <div class="flex justify-end gap-3 p-6 border-gray-200 border-t">

@@ -1,8 +1,16 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
-import { RouterLink, useRoute } from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
+import { useAuthStore } from '../../stores/auth'
 
 const route = useRoute()
+const router = useRouter()
+const authStore = useAuthStore()
+
+function handleLogout() {
+  authStore.logout()
+  router.push('/login')
+}
 
 const menuItems = ref([
   {
@@ -24,21 +32,6 @@ const menuItems = ref([
     icon: '👥',
     label: 'Użytkownicy',
     route: '/users',
-  },
-  {
-    icon: '📅',
-    label: 'Kalendarz',
-    route: '/calendar',
-  },
-  {
-    icon: '🗺️',
-    label: 'Mapa budynku',
-    route: '/building-map',
-  },
-  {
-    icon: '⏱️',
-    label: 'SLA Monitoring',
-    route: '/sla',
   },
   {
     icon: '⚙️',
@@ -80,15 +73,22 @@ const isActive = (itemRoute: string) => {
     </nav>
     
     <div class="p-4 border-white/10 border-t">
-      <div class="flex items-center gap-3">
+      <div class="flex items-center gap-3 mb-3">
         <div class="flex justify-center items-center bg-white/20 rounded-full w-10 h-10 text-lg">
           👤
         </div>
         <div class="flex-1">
-          <div class="font-semibold text-gray-100 text-sm">Admin User</div>
-          <div class="text-white/60 text-xs">Administrator</div>
+          <div class="font-semibold text-gray-100 text-sm">{{ authStore.user?.name || authStore.user?.email || 'Admin User' }}</div>
+          <div class="text-white/60 text-xs">{{ authStore.user?.is_admin ? 'Administrator' : 'Użytkownik' }}</div>
         </div>
       </div>
+      <button 
+        @click="handleLogout"
+        class="flex justify-center items-center gap-2 bg-white/10 hover:bg-white/20 px-4 py-2 rounded-lg w-full text-white/80 hover:text-white transition-all duration-300"
+      >
+        <span>🚪</span>
+        <span class="font-medium text-sm">Wyloguj się</span>
+      </button>
     </div>
   </aside>
 </template>
