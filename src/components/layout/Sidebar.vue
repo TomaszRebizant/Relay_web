@@ -113,7 +113,7 @@ const isActive = (itemRoute: string) => {
       <div class="flex justify-between items-center">
         <div class="flex items-center gap-3">
           <span class="text-2xl">🔧</span>
-          <span class="font-semibold text-gray-100 text-xl">ServiceHub</span>
+          <span class="font-semibold text-gray-100 text-xl">Relay</span>
         </div>
         <!-- Close button for mobile -->
         <button 
