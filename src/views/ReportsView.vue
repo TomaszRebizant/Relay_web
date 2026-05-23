@@ -2,6 +2,7 @@
 import { onMounted, onUnmounted, ref } from 'vue'
 import { useAuthStore } from '@/stores/auth'
 import { useTechnicians, technicians } from '@/composables/useTechnicians'
+import { notify } from '@/composables/useNotifications'
 import api from '@/utils/api'
 import {
   type ApiFault,
@@ -542,6 +543,13 @@ const createNewReport = async () => {
     
     // Refresh reports list
     await fetchReports()
+    
+    // Powiadomienie o nowym zgłoszeniu
+    notify(
+      'Nowe zgłoszenie',
+      `Utworzono: ${newReportForm.value.title}`,
+      'success'
+    )
     
     closeNewReportModal()
   } catch (error: any) {

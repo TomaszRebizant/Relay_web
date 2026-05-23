@@ -31,6 +31,11 @@ const router = createRouter({
       component: () => import('../views/AnonymousReportView.vue'),
     },
     {
+      path: '/device/:uuid',
+      name: 'public-device',
+      component: () => import('../views/PublicDeviceView.vue'),
+    },
+    {
       path: '/',
       name: 'home',
       component: HomeView,

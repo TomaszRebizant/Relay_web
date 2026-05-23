@@ -477,9 +477,9 @@ const deleteDevice = async (deviceId: string) => {
 // QR Code functions
 const generateQRCode = async (device: Device) => {
   try {
-    // Generate URL to anonymous report form with device ID
+    // Generate URL to public device details page
     const baseUrl = window.location.origin
-    const qrData = `${baseUrl}/report?device=${device.id}`
+    const qrData = `${baseUrl}/device/${device.id}`
     
     qrCodeDataUrl.value = await QRCode.toDataURL(qrData, {
       width: 256,

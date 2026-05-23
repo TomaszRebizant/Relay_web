@@ -1,4 +1,4 @@
-import { ref, onMounted, onUnmounted } from 'vue'
+import { ref } from 'vue'
 
 export interface Notification {
   id: string
@@ -9,39 +9,8 @@ export interface Notification {
 }
 
 const notifications = ref<Notification[]>([])
-let eventSource: EventSource | null = null
 
 export function useNotifications() {
-  const connect = () => {
-    // Zamknij istniejące połączenie
-    if (eventSource) {
-      eventSource.close()
-    }
-
-    // Połącz z endpointem SSE
-    eventSource = new EventSource('/api/notifications/stream')
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
-        addNotification({
-          id: data.id || Date.now().toString(),
-          title: data.title || 'Nowe powiadomienie',
-          message: data.message || '',
-          type: data.type || 'info'
-        })
-      } catch (err) {
-        console.error('Błąd parsowania powiadomienia:', err)
-      }
-    }
-
-    eventSource.onerror = (err) => {
-      console.error('Błąd SSE:', err)
-      // Automatyczne ponowne połączenie za 5s
-      setTimeout(() => connect(), 5000)
-    }
-  }
-
   const addNotification = (notification: Omit<Notification, 'timestamp'>) => {
     const fullNotification: Notification = { ...notification, timestamp: Date.now() }
     notifications.value.unshift(fullNotification)
@@ -56,17 +25,26 @@ export function useNotifications() {
     }
   }
 
-  onMounted(() => {
-    connect()
-  })
-
-  onUnmounted(() => {
-    eventSource?.close()
-  })
-
   return {
     notifications,
     addNotification,
     removeNotification
   }
+}
+
+// Globalna funkcja do wywoływania powiadomień z dowolnego miejsca
+export const notify = (title: string, message: string, type: Notification['type'] = 'info') => {
+  const id = String(Date.now())
+  const notification: Notification = {
+    id,
+    title,
+    message,
+    type,
+    timestamp: Date.now()
+  }
+  notifications.value.unshift(notification)
+  setTimeout(() => {
+    const index = notifications.value.findIndex(n => n.id === id)
+    if (index > -1) notifications.value.splice(index, 1)
+  }, 5000)
 }
